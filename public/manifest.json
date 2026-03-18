@@ -1,0 +1,19 @@
+{
+  "name": "פוקר כסף",
+  "short_name": "פוקר",
+  "description": "ניהול משחקי פוקר מזומן",
+  "theme_color": "#0a0e13",
+  "background_color": "#0a0e13",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
