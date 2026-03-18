@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react'
 
 const AdminContext = createContext(null)
 
-const ADMIN_PIN = '1234' // Default PIN — user should change this
+const ADMIN_PIN = '2010' // Default PIN — user should change this
 const ADMIN_KEY = 'poker_admin_authed'
 
 export function AdminProvider({ children }) {
