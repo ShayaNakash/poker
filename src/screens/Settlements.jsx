@@ -1,364 +1,92 @@
-import { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
-import { settlementStatus } from '../utils/settlement'
-import { useToast } from '../lib/toast'
-import { format } from 'date-fns'
-import { ChevronRight, Plus, CreditCard, Banknote, Smartphone, CheckCircle, Clock, AlertCircle } from 'lucide-react'
-import { useAdmin } from '../lib/adminAuth'
+/**
+ * Compute optimized peer-to-peer settlements.
+ * Uses a greedy min-transfer algorithm.
+ *
+ * @param {Array<{id, name, balance}>} players - positive balance = creditor, negative = debtor
+ * @returns {Array<{from_player_id, from_player_name, to_player_id, to_player_name, required_amount}>}
+ */
+export function computeSettlements(players) {
+  // Filter to players with non-zero balances
+  const creditors = players
+    .filter(p => p.balance > 0)
+    .map(p => ({ ...p, remaining: p.balance }))
+    .sort((a, b) => b.remaining - a.remaining)
 
-const METHOD_ICONS = {
-  cash: <Banknote size={14} />,
-  bit: <Smartphone size={14} />,
-  paybox: <CreditCard size={14} />,
-}
+  const debtors = players
+    .filter(p => p.balance < 0)
+    .map(p => ({ ...p, remaining: Math.abs(p.balance) }))
+    .sort((a, b) => b.remaining - a.remaining)
 
-const METHOD_LABELS = {
-  cash: 'מזומן',
-  bit: 'ביט',
-  paybox: 'פייבוקס',
-}
+  const transfers = []
 
-export default function Settlements() {
-  const { gameId } = useParams()
-  const navigate = useNavigate()
-  const showToast = useToast()
-  const { isAdmin } = useAdmin()
+  let ci = 0
+  let di = 0
 
-  const [game, setGame] = useState(null)
-  const [gamePlayers, setGamePlayers] = useState([])
-  const [buyins, setBuyins] = useState([])
-  const [settlements, setSettlements] = useState([])
-  const [payments, setPayments] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [paymentModal, setPaymentModal] = useState(null) // settlement
-  const [payAmount, setPayAmount] = useState('')
-  const [payMethod, setPayMethod] = useState('cash')
-  const [payNote, setPayNote] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState('settlements') // settlements | summary
+  while (ci < creditors.length && di < debtors.length) {
+    const creditor = creditors[ci]
+    const debtor = debtors[di]
 
-  useEffect(() => {
-    loadData()
+    const amount = Math.min(creditor.remaining, debtor.remaining)
 
-    const channel = supabase
-      .channel(`settlements-${gameId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'settlement_payments' }, loadData)
-      .subscribe()
-
-    return () => supabase.removeChannel(channel)
-  }, [gameId])
-
-  async function loadData() {
-    const [{ data: g }, { data: gp }, { data: b }, { data: s }, { data: p }] = await Promise.all([
-      supabase.from('games').select('*').eq('id', gameId).single(),
-      supabase.from('game_players').select('*').eq('game_id', gameId),
-      supabase.from('buyins').select('*').eq('game_id', gameId),
-      supabase.from('settlements').select('*').eq('game_id', gameId),
-      supabase.from('settlement_payments').select('*'),
-    ])
-    setGame(g)
-    setGamePlayers(gp || [])
-    setBuyins(b || [])
-    setSettlements(s || [])
-    setPayments(p || [])
-    setLoading(false)
-  }
-
-  function settlementPayments(sId) {
-    return payments.filter(p => p.settlement_id === sId)
-  }
-
-  async function addPayment() {
-    const amount = parseInt(payAmount)
-    if (!amount || amount <= 0) return
-
-    const { remaining } = settlementStatus(paymentModal, settlementPayments(paymentModal.id))
-    if (amount > remaining) {
-      showToast(`הסכום גדול מהיתרה (₪${remaining})`, 'error')
-      return
+    if (amount > 0) {
+      transfers.push({
+        from_player_id: debtor.id,
+        from_player_name: debtor.name,
+        to_player_id: creditor.id,
+        to_player_name: creditor.name,
+        required_amount: amount,
+      })
     }
 
-    setSaving(true)
-    const { data, error } = await supabase
-      .from('settlement_payments')
-      .insert({
-        settlement_id: paymentModal.id,
-        amount,
-        method: payMethod,
-        note: payNote || null,
-      })
-      .select()
-      .single()
+    creditor.remaining -= amount
+    debtor.remaining -= amount
 
-    if (error) { showToast('שגיאה ברישום תשלום', 'error'); setSaving(false); return }
-
-    setPayments(prev => [...prev, data])
-    setPaymentModal(null)
-    setPayAmount('')
-    setPayNote('')
-    setSaving(false)
-    showToast(`תשלום ₪${amount} נרשם ✓`, 'success')
+    if (creditor.remaining === 0) ci++
+    if (debtor.remaining === 0) di++
   }
 
-  function playerBalance(gpId) {
-    const gp = gamePlayers.find(p => p.id === gpId)
-    if (!gp) return 0
-    const activeBuyins = buyins.filter(b => b.game_player_id === gpId && !b.deleted_at)
-    const totalBuyins = activeBuyins.reduce((s, b) => s + b.amount_ils, 0)
-    return (gp.ending_chips ?? 0) - totalBuyins
-  }
+  return transfers
+}
 
-  if (loading) return <div className="loading-screen"><div className="spinner" /></div>
+/**
+ * Given game_players with ending_chips set and their buyins,
+ * compute balances for each player.
+ */
+export function computeBalances(gamePlayers, buyins, rate = 20) {
+  return gamePlayers.map(gp => {
+    const playerBuyins = buyins.filter(b => b.game_player_id === gp.id && !b.deleted_at)
+    const totalBuyinsIls = playerBuyins.reduce((sum, b) => sum + b.amount_ils, 0)
+    const endingChips = gp.ending_chips ?? 0
+    // Convert ending chips back to ILS using rate
+    const endingIls = Math.round(endingChips / rate * 20)
+    const balance = endingIls - totalBuyinsIls
 
-  return (
-    <div className="screen">
-      <div className="header">
-        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>
-          <ChevronRight size={18} />
-        </button>
-        <div>
-          <div className="header-title">סילוקים</div>
-          <div className="header-sub">{game?.title}</div>
-        </div>
-        <div style={{ width: 60 }} />
-      </div>
+    return {
+      id: gp.id,
+      player_id: gp.player_id,
+      name: gp.player_name,
+      totalBuyinsIls,
+      buysCount: playerBuyins.length,
+      endingChips,
+      endingIls,
+      balance,
+    }
+  })
+}
 
-      {/* Tabs */}
-      <div style={{
-        display: 'flex',
-        borderBottom: '1px solid var(--border)',
-        background: 'var(--bg2)',
-      }}>
-        {['settlements', 'summary'].map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            style={{
-              flex: 1,
-              padding: '12px',
-              border: 'none',
-              background: 'none',
-              color: activeTab === tab ? 'var(--gold)' : 'var(--text2)',
-              fontFamily: 'Heebo',
-              fontWeight: 600,
-              fontSize: '0.9rem',
-              borderBottom: `2px solid ${activeTab === tab ? 'var(--gold)' : 'transparent'}`,
-              cursor: 'pointer',
-            }}
-          >
-            {tab === 'settlements' ? 'העברות' : 'סיכום'}
-          </button>
-        ))}
-      </div>
+/**
+ * Compute paid amount and remaining for a settlement given its payments
+ */
+export function settlementStatus(settlement, payments) {
+  const paid = payments
+    .filter(p => p.settlement_id === settlement.id)
+    .reduce((sum, p) => sum + p.amount, 0)
 
-      <div className="content" style={{ paddingBottom: 24 }}>
-        {activeTab === 'settlements' && (
-          <>
-            <div className="section-title">העברות מומלצות</div>
+  const remaining = settlement.required_amount - paid
 
-            {settlements.length === 0 ? (
-              <div className="empty-state">
-                <CheckCircle />
-                <p>אין העברות — כולם בפלוס!</p>
-              </div>
-            ) : (
-              settlements.map(s => {
-                const sPayments = settlementPayments(s.id)
-                const { paid, remaining, status } = settlementStatus(s, sPayments)
+  let status = 'unpaid'
+  if (paid >= settlement.required_amount) status = 'paid'
+  else if (paid > 0) status = 'partial'
 
-                const statusConfig = {
-                  unpaid: { label: 'לא שולם', cls: 'badge-red', icon: <AlertCircle size={12} /> },
-                  partial: { label: 'חלקי', cls: 'badge-orange', icon: <Clock size={12} /> },
-                  paid: { label: 'שולם', cls: 'badge-green', icon: <CheckCircle size={12} /> },
-                }
-                const sc = statusConfig[status]
-
-                return (
-                  <div key={s.id} className="settlement-card">
-                    {/* Header */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <span className={`badge ${sc.cls}`}>
-                        {sc.icon} {sc.label}
-                      </span>
-                    </div>
-
-                    {/* Transfer info */}
-                    <div className="transfer-arrow">
-                      <span style={{ color: 'var(--red)', fontWeight: 800 }}>{s.from_player_name}</span>
-                      <span style={{ color: 'var(--text3)' }}>←</span>
-                      <span style={{ color: 'var(--green)', fontWeight: 800 }}>{s.to_player_name}</span>
-                    </div>
-
-                    <div className="transfer-amount">₪{s.required_amount}</div>
-
-                    {/* Payment progress */}
-                    {paid > 0 && (
-                      <div style={{ marginBottom: 10 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: 'var(--text2)', marginBottom: 4 }}>
-                          <span>שולם: ₪{paid}</span>
-                          <span>נותר: <strong style={{ color: remaining > 0 ? 'var(--orange)' : 'var(--green)' }}>₪{remaining}</strong></span>
-                        </div>
-                        <div style={{ height: 4, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
-                          <div style={{
-                            height: '100%',
-                            width: `${Math.min(100, (paid / s.required_amount) * 100)}%`,
-                            background: status === 'paid' ? 'var(--green)' : 'var(--gold)',
-                            borderRadius: 4,
-                            transition: 'width 0.3s',
-                          }} />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Payment records */}
-                    {sPayments.map(p => (
-                      <div key={p.id} style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '6px 8px',
-                        background: 'var(--bg3)',
-                        borderRadius: 'var(--radius-sm)',
-                        marginBottom: 4,
-                        fontSize: '0.82rem',
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text2)' }}>
-                          {METHOD_ICONS[p.method]}
-                          {METHOD_LABELS[p.method]}
-                          {p.note && <span style={{ color: 'var(--text3)' }}>· {p.note}</span>}
-                        </div>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <span style={{ color: 'var(--text3)' }}>{format(new Date(p.paid_at), 'HH:mm')}</span>
-                          <strong style={{ color: 'var(--green)' }}>₪{p.amount}</strong>
-                        </div>
-                      </div>
-                    ))}
-
-                    {/* Add payment button */}
-                    {status !== 'paid' && isAdmin && (
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        style={{ width: '100%', marginTop: 8 }}
-                        onClick={() => {
-                          setPaymentModal(s)
-                          setPayAmount(String(remaining))
-                          setPayMethod('cash')
-                          setPayNote('')
-                        }}
-                      >
-                        <Plus size={14} /> רשום תשלום
-                      </button>
-                    )}
-                  </div>
-                )
-              })
-            )}
-          </>
-        )}
-
-        {activeTab === 'summary' && (
-          <>
-            <div className="section-title">סיכום שחקנים</div>
-            {gamePlayers.map(gp => {
-              const activeBuyinsArr = buyins.filter(b => b.game_player_id === gp.id && !b.deleted_at)
-              const totalBuyins = activeBuyinsArr.reduce((s, b) => s + b.amount_ils, 0)
-              const ending = gp.ending_chips ?? 0
-              const pl = ending - totalBuyins
-
-              return (
-                <div key={gp.id} className="card" style={{ marginBottom: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{gp.player_name}</div>
-                    <div className={pl > 0 ? 'amount-pos' : pl < 0 ? 'amount-neg' : 'amount-zero'} style={{ fontSize: '1.2rem' }}>
-                      {pl > 0 ? '+' : ''}₪{pl}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-                    <div className="stat-pill">השקיע: <strong>₪{totalBuyins}</strong></div>
-                    <div className="stat-pill">סיים: <strong>{ending} צ'יפס</strong></div>
-                    <div className="stat-pill">{activeBuyinsArr.length} buy-ins</div>
-                  </div>
-                </div>
-              )
-            })}
-          </>
-        )}
-      </div>
-
-      {/* Payment modal */}
-      {paymentModal && (
-        <div className="modal-overlay" onClick={() => setPaymentModal(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-title">💸 רשום תשלום</div>
-            <div style={{ marginBottom: 12, color: 'var(--text2)', fontSize: '0.9rem' }}>
-              {paymentModal.from_player_name} → {paymentModal.to_player_name}
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">סכום (₪)</label>
-              <input
-                type="number"
-                inputMode="numeric"
-                value={payAmount}
-                onChange={e => setPayAmount(e.target.value)}
-                autoFocus
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">אמצעי תשלום</label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {['cash', 'bit', 'paybox'].map(m => (
-                  <button
-                    key={m}
-                    onClick={() => setPayMethod(m)}
-                    style={{
-                      flex: 1,
-                      padding: '10px',
-                      border: `2px solid ${payMethod === m ? 'var(--gold)' : 'var(--border)'}`,
-                      borderRadius: 'var(--radius-sm)',
-                      background: payMethod === m ? 'rgba(212,168,83,0.15)' : 'var(--bg3)',
-                      color: payMethod === m ? 'var(--gold)' : 'var(--text2)',
-                      fontFamily: 'Heebo',
-                      fontWeight: 600,
-                      fontSize: '0.85rem',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 4,
-                    }}
-                  >
-                    {METHOD_ICONS[m]} {METHOD_LABELS[m]}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">הערה (אופציונלי)</label>
-              <input
-                value={payNote}
-                onChange={e => setPayNote(e.target.value)}
-                placeholder="הערה..."
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button
-                className="btn btn-primary"
-                style={{ flex: 1 }}
-                onClick={addPayment}
-                disabled={saving || !payAmount}
-              >
-                {saving ? 'שומר...' : 'רשום תשלום'}
-              </button>
-              <button className="btn btn-ghost" onClick={() => setPaymentModal(null)}>ביטול</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
+  return { paid, remaining, status }
 }
