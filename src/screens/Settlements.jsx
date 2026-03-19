@@ -276,7 +276,7 @@ export default function Settlements() {
                   </div>
                   <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
                     <div className="stat-pill">השקיע: <strong>₪{totalBuyins}</strong></div>
-                    <div className="stat-pill">סיים: <strong>{ending} ג'ים</strong></div>
+                    <div className="stat-pill">סיים: <strong>{ending} צ'יפס</strong></div>
                     <div className="stat-pill">{activeBuyinsArr.length} buy-ins</div>
                   </div>
                 </div>
