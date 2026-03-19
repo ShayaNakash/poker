@@ -203,7 +203,7 @@ export default function ViewerPage() {
                         <div>
                           <div style={{ fontWeight: 700 }}>{gp.player_name}</div>
                           <div style={{ fontSize: '0.8rem', color: 'var(--text2)' }}>
-                            השקיע ₪{total} · סיים {ending} ג'ים
+                            השקיע ₪{total} · סיים {ending} צ'יפס
                           </div>
                         </div>
                       </div>
