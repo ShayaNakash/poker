@@ -69,7 +69,7 @@ export default function EndGame() {
     // Validate all players have chip counts
     const missing = gamePlayers.filter(gp => chips[gp.id] === undefined || chips[gp.id] === '')
     if (missing.length > 0) {
-      showToast(`חסרים נתוני ג'ים עבור: ${missing.map(p => p.player_name).join(', ')}`, 'error')
+      showToast(`חסרים נתוני צ'יפס עבור: ${missing.map(p => p.player_name).join(', ')}`, 'error')
       return
     }
 
@@ -144,7 +144,7 @@ export default function EndGame() {
         </button>
         <div>
           <div className="header-title">סיום משחק</div>
-          <div className="header-sub">הכנס ג'ים סיום</div>
+          <div className="header-sub">הכנס צ'יפס סיום</div>
         </div>
         <div style={{ width: 60 }} />
       </div>
@@ -174,7 +174,7 @@ export default function EndGame() {
           justifyContent: 'space-between',
         }}>
           <div style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>
-            סה"כ ג'ים שהוכנסו
+            סה"כ צ'יפס שהוכנסו
           </div>
           <div style={{
             fontWeight: 800,
@@ -200,14 +200,14 @@ export default function EndGame() {
             <AlertTriangle size={16} />
             <span>
               {chipsTotal > pot
-                ? `יש ${chipsTotal - pot} ג'ים יותר מהקופה`
-                : `חסרים ${pot - chipsTotal} ג'ים`}
+                ? `יש ${chipsTotal - pot} צ'יפס יותר מהקופה`
+                : `חסרים ${pot - chipsTotal} צ'יפס`}
             </span>
           </div>
         )}
 
         {/* Player chip entry */}
-        <div className="section-title">ג'ים לפי שחקן</div>
+        <div className="section-title">צ'יפס לפי שחקן</div>
 
         {gamePlayers.map(gp => {
           const total = playerTotal(gp.id)
@@ -233,7 +233,7 @@ export default function EndGame() {
               <input
                 type="number"
                 inputMode="numeric"
-                placeholder="מספר ג'ים..."
+                placeholder="מספר צ'יפס..."
                 value={chips[gp.id] ?? ''}
                 onChange={e => setChips(prev => ({ ...prev, [gp.id]: e.target.value }))}
               />
@@ -275,7 +275,7 @@ export default function EndGame() {
 
         {!balanced && chipsTotal > 0 && (
           <div style={{ textAlign: 'center', color: 'var(--text3)', fontSize: '0.8rem', marginTop: 8 }}>
-            סה"כ הג'ים חייב להיות {pot}
+            סה"כ הצ'יפס חייב להיות {pot}
           </div>
         )}
       </div>
