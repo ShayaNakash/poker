@@ -3,6 +3,7 @@ import { AdminProvider } from './lib/adminAuth'
 import { ToastProvider } from './lib/toast'
 import { AuthProvider, useAuth } from './lib/authContext'
 import AuthScreen from './screens/AuthScreen'
+import ResetPassword from './screens/ResetPassword'
 import GamesList from './screens/GamesList'
 import CreateGame from './screens/CreateGame'
 import AdminDashboard from './screens/AdminDashboard'
@@ -38,6 +39,7 @@ function AppRoutes() {
       <Route path="/auth" element={
         <PublicRoute><AuthScreen /></PublicRoute>
       } />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       {/* Protected routes */}
       <Route path="/" element={
