@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/authContext'
 import { useToast } from '../lib/toast'
 
 export default function AuthScreen() {
   const { signIn, signUp } = useAuth()
   const showToast = useToast()
+  const navigate = useNavigate()
 
   const [mode, setMode] = useState('login') // login | signup
   const [email, setEmail] = useState('')
@@ -161,6 +163,14 @@ export default function AuthScreen() {
               >
                 הירשם בחינם
               </button>
+              <div style={{ marginTop: 12 }}>
+                <button
+                  onClick={() => navigate('/reset-password')}
+                  style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontFamily: 'Heebo', fontSize: '0.85rem' }}
+                >
+                  שכחתי סיסמה
+                </button>
+              </div>
             </>
           ) : (
             <>
