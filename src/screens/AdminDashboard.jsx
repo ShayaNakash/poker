@@ -3,10 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
 import { format } from 'date-fns'
-import {
-  ChevronRight, Flag, Share2, ChevronDown, ChevronUp,
-  Plus, Clock, Edit2, Trash2, Lock, Eye
-} from 'lucide-react'
+import { ChevronRight, Flag, Share2, ChevronDown, ChevronUp, Plus, Clock, Edit2, Trash2, Lock, Eye } from 'lucide-react'
 
 const QUICK_AMOUNTS = [20, 40, 60, 100, 200]
 
@@ -49,40 +46,47 @@ export default function AdminDashboard() {
     return () => supabase.removeChannel(channel)
   }, [gameId, loadData])
 
+  // Chips rate: how many chips per ₪20
+  const rate = game?.chips_per_20 || 20
+  const ilsToChips = (ils) => Math.round(ils / 20 * rate)
+
   const activeBuyins = (gpId) => buyins.filter(b => b.game_player_id === gpId && !b.deleted_at)
   const playerTotal = (gpId) => activeBuyins(gpId).reduce((s, b) => s + b.amount_ils, 0)
+  const playerTotalChips = (gpId) => activeBuyins(gpId).reduce((s, b) => s + b.chips, 0)
   const totalPot = () => buyins.filter(b => !b.deleted_at).reduce((s, b) => s + b.amount_ils, 0)
 
   async function addBuyin(gpId, amount) {
     if (!amount || amount <= 0) return
     const gp = gamePlayers.find(p => p.id === gpId)
+    const chips = ilsToChips(amount)
     const { data: buyin, error } = await supabase
       .from('buyins')
-      .insert({ game_id: gameId, game_player_id: gpId, amount_ils: amount, chips: amount })
+      .insert({ game_id: gameId, game_player_id: gpId, amount_ils: amount, chips })
       .select().single()
     if (error) { showToast('שגיאה בהוספת buy-in', 'error'); return }
     await supabase.from('audit_logs').insert({
       game_id: gameId, action: 'add_buyin', entity_type: 'buyin',
-      entity_id: buyin.id, after_data: { player: gp?.player_name, amount_ils: amount }
+      entity_id: buyin.id, after_data: { player: gp?.player_name, amount_ils: amount, chips }
     })
     setBuyins(prev => [...prev, buyin])
     setBuyinModal(null); setCustomAmount('')
-    showToast(`✓ +₪${amount} ל${gp?.player_name}`, 'success')
+    showToast(`✓ +₪${amount} (${chips} צ'יפים) ל${gp?.player_name}`, 'success')
   }
 
   async function confirmEdit() {
     const amount = parseInt(editAmount)
     if (!amount || amount <= 0) return
     const before = { ...editModal }
+    const chips = ilsToChips(amount)
     const { error } = await supabase
-      .from('buyins').update({ amount_ils: amount, chips: amount }).eq('id', editModal.id)
+      .from('buyins').update({ amount_ils: amount, chips }).eq('id', editModal.id)
     if (error) { showToast('שגיאה בעריכה', 'error'); return }
     await supabase.from('audit_logs').insert({
       game_id: gameId, action: 'edit_buyin', entity_type: 'buyin',
       entity_id: editModal.id, before_data: before,
-      after_data: { ...before, amount_ils: amount, chips: amount }
+      after_data: { ...before, amount_ils: amount, chips }
     })
-    setBuyins(prev => prev.map(b => b.id === editModal.id ? { ...b, amount_ils: amount, chips: amount } : b))
+    setBuyins(prev => prev.map(b => b.id === editModal.id ? { ...b, amount_ils: amount, chips } : b))
     setEditModal(null); setEditAmount('')
     showToast('עדכון בוצע ✓', 'success')
   }
@@ -113,7 +117,7 @@ export default function AdminDashboard() {
   }
 
   async function lockGame() {
-    if (!window.confirm('לנעול את המשחק? לא ניתן יהיה להוסיף buy-ins נוספים.')) return
+    if (!window.confirm('לנעול את המשחק?')) return
     await supabase.from('games').update({ status: 'locked' }).eq('id', gameId)
     showToast('המשחק ננעל ✓', 'info')
     loadData()
@@ -132,9 +136,7 @@ export default function AdminDashboard() {
         </div>
         <div className="content" style={{ textAlign: 'center', paddingTop: 60 }}>
           <Lock size={48} style={{ opacity: 0.3, marginBottom: 16 }} />
-          <div style={{ color: 'var(--text2)', marginBottom: 24 }}>
-            המשחק {game.status === 'locked' ? 'ננעל' : 'הסתיים'}
-          </div>
+          <div style={{ color: 'var(--text2)', marginBottom: 24 }}>המשחק {game.status === 'locked' ? 'ננעל' : 'הסתיים'}</div>
           <button className="btn btn-primary btn-lg" onClick={() => navigate(`/game/${gameId}/settlements`)}>
             צפה בסילוקים
           </button>
@@ -142,6 +144,9 @@ export default function AdminDashboard() {
       </div>
     )
   }
+
+  // Show chips rate if not default
+  const rateLabel = rate !== 20 ? `₪20 = ${rate} צ'יפים` : null
 
   return (
     <div className="screen">
@@ -151,7 +156,7 @@ export default function AdminDashboard() {
           <div className="header-title">{game.title}</div>
           <div className="header-sub">
             קופה: <strong style={{ color: 'var(--gold)' }}>₪{totalPot()}</strong>
-            {' · '}{gamePlayers.length} שחקנים
+            {rateLabel && <span style={{ color: 'var(--text3)', marginRight: 6 }}>· {rateLabel}</span>}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
@@ -164,7 +169,6 @@ export default function AdminDashboard() {
       </div>
 
       <div className="content">
-        {/* Live indicator */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
           <span className="pulse" style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)', display: 'inline-block', flexShrink: 0 }} />
           <span style={{ color: 'var(--green)', fontSize: '0.82rem', fontWeight: 600 }}>משחק פעיל · עדכון חי</span>
@@ -173,15 +177,15 @@ export default function AdminDashboard() {
             style={{ marginRight: 'auto', fontSize: '0.75rem', color: 'var(--text3)', padding: '4px 8px' }}
             onClick={lockGame}
           >
-            <Lock size={12} /> נעל משחק
+            <Lock size={12} /> נעל
           </button>
         </div>
 
-        {/* Player cards */}
         {gamePlayers.map(gp => {
           const pBuyins = activeBuyins(gp.id)
           const deletedBuyins = buyins.filter(b => b.game_player_id === gp.id && b.deleted_at)
           const total = playerTotal(gp.id)
+          const totalChips = playerTotalChips(gp.id)
           const count = pBuyins.length
           const last = pBuyins[pBuyins.length - 1]
           const isExpanded = expandedPlayer === gp.id
@@ -193,11 +197,11 @@ export default function AdminDashboard() {
                   <div className="player-name-big">{gp.player_name}</div>
                   <div className="player-stats-row">
                     <div className="stat-pill">₪<strong>{total}</strong></div>
+                    {rate !== 20 && <div className="stat-pill"><strong>{totalChips}</strong> צ'יפים</div>}
                     <div className="stat-pill">{count} buys</div>
                     {last && (
                       <div className="stat-pill" style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                        <Clock size={11} />
-                        {format(new Date(last.recorded_at), 'HH:mm')}
+                        <Clock size={11} />{format(new Date(last.recorded_at), 'HH:mm')}
                       </div>
                     )}
                   </div>
@@ -211,10 +215,12 @@ export default function AdminDashboard() {
                 </button>
               </div>
 
-              {/* Quick buy-in */}
               <div className="quick-buy-grid">
                 {QUICK_AMOUNTS.map(amt => (
-                  <button key={amt} className="buy-btn" onClick={() => addBuyin(gp.id, amt)}>+{amt}</button>
+                  <button key={amt} className="buy-btn" onClick={() => addBuyin(gp.id, amt)}>
+                    +{amt}
+                    {rate !== 20 && <div style={{ fontSize: '0.65rem', color: 'var(--text3)' }}>{ilsToChips(amt)}🪙</div>}
+                  </button>
                 ))}
               </div>
               <button
@@ -225,7 +231,6 @@ export default function AdminDashboard() {
                 <Plus size={13} /> סכום מותאם
               </button>
 
-              {/* Buy-in history */}
               {isExpanded && (
                 <div style={{ marginTop: 12 }}>
                   <div className="divider" />
@@ -235,13 +240,16 @@ export default function AdminDashboard() {
                   {pBuyins.length === 0 && (
                     <div style={{ color: 'var(--text3)', fontSize: '0.85rem', padding: '4px 0' }}>אין buy-ins</div>
                   )}
-                  {pBuyins.map((b, i) => (
+                  {pBuyins.map(b => (
                     <div key={b.id} style={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                       padding: '8px 0', borderBottom: '1px solid var(--border)',
                     }}>
                       <div>
-                        <div style={{ fontWeight: 700, color: 'var(--gold)' }}>₪{b.amount_ils}</div>
+                        <div style={{ fontWeight: 700, color: 'var(--gold)' }}>
+                          ₪{b.amount_ils}
+                          {rate !== 20 && <span style={{ color: 'var(--text3)', fontWeight: 400, fontSize: '0.82rem', marginRight: 4 }}>({b.chips} צ'יפים)</span>}
+                        </div>
                         <div style={{ fontSize: '0.73rem', color: 'var(--text3)' }}>
                           {format(new Date(b.recorded_at), 'HH:mm, dd/MM/yy')}
                         </div>
@@ -263,7 +271,7 @@ export default function AdminDashboard() {
                       <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginBottom: 4 }}>נמחקו:</div>
                       {deletedBuyins.map(b => (
                         <div key={b.id} style={{ fontSize: '0.78rem', color: 'var(--text3)', opacity: 0.6, textDecoration: 'line-through', padding: '2px 0' }}>
-                          ₪{b.amount_ils} — {format(new Date(b.recorded_at), 'HH:mm')} {b.delete_reason ? `(${b.delete_reason})` : ''}
+                          ₪{b.amount_ils} — {format(new Date(b.recorded_at), 'HH:mm')}
                         </div>
                       ))}
                     </div>
@@ -274,11 +282,9 @@ export default function AdminDashboard() {
           )
         })}
 
-        {/* Bottom summary + end game */}
         <div style={{
           background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
-          padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          margin: '16px 0',
+          padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '16px 0',
         }}>
           <span style={{ color: 'var(--text2)' }}>סה"כ בקופה</span>
           <span style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--gold)' }}>₪{totalPot()}</span>
@@ -297,16 +303,29 @@ export default function AdminDashboard() {
             <div className="modal-title">
               💰 Buy-in — {gamePlayers.find(p => p.id === buyinModal)?.player_name}
             </div>
+            {rate !== 20 && (
+              <div style={{ color: 'var(--text3)', fontSize: '0.82rem', marginBottom: 12 }}>
+                יחס: ₪20 = {rate} צ'יפים
+              </div>
+            )}
             <div className="form-group">
               <label className="form-label">סכום (₪)</label>
               <input type="number" inputMode="numeric" placeholder="0"
                 value={customAmount} onChange={e => setCustomAmount(e.target.value)} autoFocus
                 onKeyDown={e => e.key === 'Enter' && addBuyin(buyinModal, parseInt(customAmount))} />
+              {customAmount && parseInt(customAmount) > 0 && rate !== 20 && (
+                <div style={{ marginTop: 6, fontSize: '0.82rem', color: 'var(--gold)' }}>
+                  = {ilsToChips(parseInt(customAmount))} צ'יפים
+                </div>
+              )}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 14 }}>
               {QUICK_AMOUNTS.map(amt => (
                 <button key={amt} className="buy-btn" style={{ padding: '12px' }}
-                  onClick={() => addBuyin(buyinModal, amt)}>₪{amt}</button>
+                  onClick={() => addBuyin(buyinModal, amt)}>
+                  ₪{amt}
+                  {rate !== 20 && <div style={{ fontSize: '0.65rem' }}>{ilsToChips(amt)}🪙</div>}
+                </button>
               ))}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
@@ -332,6 +351,11 @@ export default function AdminDashboard() {
               <input type="number" inputMode="numeric" value={editAmount}
                 onChange={e => setEditAmount(e.target.value)} autoFocus
                 onKeyDown={e => e.key === 'Enter' && confirmEdit()} />
+              {editAmount && parseInt(editAmount) > 0 && rate !== 20 && (
+                <div style={{ marginTop: 6, fontSize: '0.82rem', color: 'var(--gold)' }}>
+                  = {ilsToChips(parseInt(editAmount))} צ'יפים
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={confirmEdit}>שמור</button>
@@ -345,9 +369,7 @@ export default function AdminDashboard() {
       {deleteConfirm && (
         <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-title" style={{ color: 'var(--red)' }}>
-              <Trash2 size={18} /> מחיקת Buy-in
-            </div>
+            <div className="modal-title" style={{ color: 'var(--red)' }}><Trash2 size={18} /> מחיקת Buy-in</div>
             <div style={{ color: 'var(--text2)', marginBottom: 14 }}>
               מחק buy-in של <strong style={{ color: 'var(--gold)' }}>₪{deleteConfirm.amount_ils}</strong>?
             </div>
