@@ -74,7 +74,7 @@ export default function AuthScreen() {
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <div style={{ fontSize: '3rem', marginBottom: 8 }}>♠</div>
           <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--gold)' }}>
-            פוקר כסף
+            פוקר עם החבר'ה
           </div>
           <div style={{ color: 'var(--text3)', fontSize: '0.9rem', marginTop: 4 }}>
             ניהול משחקי פוקר מזומן
