@@ -1,6 +1,8 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AdminProvider } from './lib/adminAuth'
 import { ToastProvider } from './lib/toast'
+import { AuthProvider, useAuth } from './lib/authContext'
+import AuthScreen from './screens/AuthScreen'
 import GamesList from './screens/GamesList'
 import CreateGame from './screens/CreateGame'
 import AdminDashboard from './screens/AdminDashboard'
@@ -10,22 +12,66 @@ import ViewerPage from './screens/ViewerPage'
 import History from './screens/History'
 import './index.css'
 
+// Protected route — redirects to login if not authenticated
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return <div className="loading-screen"><div className="spinner" /></div>
+  if (!user) return <Navigate to="/auth" replace />
+  return children
+}
+
+// Public route — redirects to home if already authenticated
+function PublicRoute({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return <div className="loading-screen"><div className="spinner" /></div>
+  if (user) return <Navigate to="/" replace />
+  return children
+}
+
+function AppRoutes() {
+  return (
+    <Routes>
+      {/* Public — viewer link (no auth needed) */}
+      <Route path="/view/:token" element={<ViewerPage />} />
+
+      {/* Auth */}
+      <Route path="/auth" element={
+        <PublicRoute><AuthScreen /></PublicRoute>
+      } />
+
+      {/* Protected routes */}
+      <Route path="/" element={
+        <ProtectedRoute><GamesList /></ProtectedRoute>
+      } />
+      <Route path="/create-game" element={
+        <ProtectedRoute><CreateGame /></ProtectedRoute>
+      } />
+      <Route path="/game/:gameId" element={
+        <ProtectedRoute><AdminDashboard /></ProtectedRoute>
+      } />
+      <Route path="/game/:gameId/end" element={
+        <ProtectedRoute><EndGame /></ProtectedRoute>
+      } />
+      <Route path="/game/:gameId/settlements" element={
+        <ProtectedRoute><Settlements /></ProtectedRoute>
+      } />
+      <Route path="/history" element={
+        <ProtectedRoute><History /></ProtectedRoute>
+      } />
+    </Routes>
+  )
+}
+
 export default function App() {
   return (
-    <AdminProvider>
-      <ToastProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<GamesList />} />
-            <Route path="/create-game" element={<CreateGame />} />
-            <Route path="/game/:gameId" element={<AdminDashboard />} />
-            <Route path="/game/:gameId/end" element={<EndGame />} />
-            <Route path="/game/:gameId/settlements" element={<Settlements />} />
-            <Route path="/view/:token" element={<ViewerPage />} />
-            <Route path="/history" element={<History />} />
-          </Routes>
-        </BrowserRouter>
-      </ToastProvider>
-    </AdminProvider>
+    <AuthProvider>
+      <AdminProvider>
+        <ToastProvider>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </ToastProvider>
+      </AdminProvider>
+    </AuthProvider>
   )
 }
