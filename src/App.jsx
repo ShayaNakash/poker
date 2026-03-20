@@ -4,6 +4,7 @@ import { ToastProvider } from './lib/toast'
 import { AuthProvider, useAuth } from './lib/authContext'
 import AuthScreen from './screens/AuthScreen'
 import ResetPassword from './screens/ResetPassword'
+import LandingPage from './screens/LandingPage'
 import GamesList from './screens/GamesList'
 import CreateGame from './screens/CreateGame'
 import AdminDashboard from './screens/AdminDashboard'
@@ -13,11 +14,11 @@ import ViewerPage from './screens/ViewerPage'
 import History from './screens/History'
 import './index.css'
 
-// Protected route — redirects to login if not authenticated
+// Protected route — redirects to landing if not authenticated
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>
-  if (!user) return <Navigate to="/auth" replace />
+  if (!user) return <Navigate to="/welcome" replace />
   return children
 }
 
@@ -29,11 +30,22 @@ function PublicRoute({ children }) {
   return children
 }
 
+// Guest route — shows landing page for non-authenticated users
+function GuestRoute({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return <div className="loading-screen"><div className="spinner" /></div>
+  if (!user) return <Navigate to="/welcome" replace />
+  return children
+}
+
 function AppRoutes() {
   return (
     <Routes>
       {/* Public — viewer link (no auth needed) */}
       <Route path="/view/:token" element={<ViewerPage />} />
+
+      {/* Landing page — public */}
+      <Route path="/welcome" element={<LandingPage />} />
 
       {/* Auth */}
       <Route path="/auth" element={
