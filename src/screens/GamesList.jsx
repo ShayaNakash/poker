@@ -5,7 +5,7 @@ import { useAuth } from '../lib/authContext'
 import { useToast } from '../lib/toast'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
-import { Plus, Lock, Play, ChevronLeft, BarChart2, LogOut, Trophy, Trash2 } from 'lucide-react'
+import { Plus, Lock, Play, ChevronLeft, BarChart2, LogOut, Trophy, Trash2, Share2 } from 'lucide-react'
 
 export default function GamesList() {
   const navigate = useNavigate()
@@ -33,6 +33,13 @@ export default function GamesList() {
   async function handleSignOut() {
     await signOut()
     showToast('יצאת בהצלחה', 'info')
+  }
+
+  async function shareApp() {
+    const url = 'https://poker-three-coral.vercel.app'
+    const text = 'ניהול משחקי פוקר מזומן — פוקר עם החבר\'ה 🃏'
+    try { await navigator.share({ title: 'פוקר עם החבר\'ה', text, url }) }
+    catch { await navigator.clipboard.writeText(url); showToast('קישור האפליקציה הועתק ✓', 'success') }
   }
 
   async function deleteGame(game) {
@@ -79,6 +86,9 @@ export default function GamesList() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-ghost btn-sm" onClick={shareApp} title="שתף את האפליקציה">
+            <Share2 size={16} />
+          </button>
           <button className="btn btn-ghost btn-sm" onClick={() => navigate('/history')}>
             <BarChart2 size={16} />
           </button>
