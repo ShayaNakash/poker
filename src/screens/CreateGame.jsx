@@ -23,7 +23,11 @@ export default function CreateGame() {
   useEffect(() => { loadPlayers() }, [])
 
   async function loadPlayers() {
-    const { data } = await supabase.from('players').select('*').order('name')
+    const { data } = await supabase
+      .from('players')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('name')
     setAllPlayers(data || [])
   }
 
@@ -34,7 +38,10 @@ export default function CreateGame() {
       showToast('שחקן עם שם זה כבר קיים', 'error')
       return
     }
-    const { data, error } = await supabase.from('players').insert({ name }).select().single()
+    const { data, error } = await supabase
+      .from('players')
+      .insert({ name, user_id: user.id })
+      .select().single()
     if (error) { showToast('שגיאה בהוספת שחקן', 'error'); return }
     setAllPlayers(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
     setSelectedIds(prev => [...prev, data.id])
