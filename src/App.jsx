@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './lib/authContext'
 import AuthScreen from './screens/AuthScreen'
 import ResetPassword from './screens/ResetPassword'
 import LandingPage from './screens/LandingPage'
+import FeedbackScreen from './screens/FeedbackScreen'
 import GamesList from './screens/GamesList'
 import CreateGame from './screens/CreateGame'
 import AdminDashboard from './screens/AdminDashboard'
@@ -71,6 +72,9 @@ function AppRoutes() {
       } />
       <Route path="/history" element={
         <ProtectedRoute><History /></ProtectedRoute>
+      } />
+      <Route path="/feedback" element={
+        <ProtectedRoute><FeedbackScreen /></ProtectedRoute>
       } />
     </Routes>
   )
