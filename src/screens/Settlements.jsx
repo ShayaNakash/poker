@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { settlementStatus } from '../utils/settlement'
 import { useToast } from '../lib/toast'
-import { useAdmin } from '../lib/adminAuth'
+import { useAuth } from '../lib/authContext'
 import { format } from 'date-fns'
 import { ChevronRight, Plus, CreditCard, Banknote, Smartphone, CheckCircle, Clock, AlertCircle } from 'lucide-react'
 
@@ -23,7 +23,8 @@ export default function Settlements() {
   const { gameId } = useParams()
   const navigate = useNavigate()
   const showToast = useToast()
-  const { isAdmin } = useAdmin()
+  const { user } = useAuth()
+  const isAdmin = !!user
 
   const [game, setGame] = useState(null)
   const [gamePlayers, setGamePlayers] = useState([])
