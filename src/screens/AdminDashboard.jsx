@@ -81,12 +81,14 @@ export default function AdminDashboard() {
   }, [gameId, loadData, user])
 
   function goToEndGame() {
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current)
-      channelRef.current = null
-    }
-    setShowEndGame(true)
+  console.log('goToEndGame called', showEndGame)
+  if (channelRef.current) {
+    supabase.removeChannel(channelRef.current)
+    channelRef.current = null
   }
+  setShowEndGame(true)
+  console.log('setShowEndGame called')
+}
 
   const rate = game?.chips_per_20 || 20
   const ilsToChips = (ils) => Math.round(ils / 20 * rate)
