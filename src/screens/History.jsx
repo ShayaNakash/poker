@@ -154,8 +154,12 @@ export default function History() {
                 <p>אין שחקנים עדיין</p>
               </div>
             ) : (
-              players.map(p => {
+              [...players]
+                .sort((a, b) => playerStats(b).totalPL - playerStats(a).totalPL)
+                .map((p, i) => {
                 const st = playerStats(p)
+                const medals = ['🥇', '🥈', '🥉']
+                const medal = st.gamesPlayed > 0 ? medals[i] : null
                 return (
                   <div
                     key={p.id}
@@ -164,16 +168,19 @@ export default function History() {
                     onClick={() => setSelectedPlayer(p.id)}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontWeight: 700, marginBottom: 4 }}>{p.name}</div>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <span className="stat-pill">{st.gamesPlayed} משחקים</span>
-                          {st.owedByPlayer > 0 && (
-                            <span className="badge badge-red">חייב ₪{st.owedByPlayer}</span>
-                          )}
-                          {st.owedToPlayer > 0 && (
-                            <span className="badge badge-green">מגיע ₪{st.owedToPlayer}</span>
-                          )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        {medal && <span style={{ fontSize: '1.3rem', flexShrink: 0 }}>{medal}</span>}
+                        <div>
+                          <div style={{ fontWeight: 700, marginBottom: 4 }}>{p.name}</div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <span className="stat-pill">{st.gamesPlayed} משחקים</span>
+                            {st.owedByPlayer > 0 && (
+                              <span className="badge badge-red">חייב ₪{st.owedByPlayer}</span>
+                            )}
+                            {st.owedToPlayer > 0 && (
+                              <span className="badge badge-green">מגיע ₪{st.owedToPlayer}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div>
