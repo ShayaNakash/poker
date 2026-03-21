@@ -61,14 +61,14 @@ function AppRoutes() {
       <Route path="/create-game" element={
         <ProtectedRoute><CreateGame /></ProtectedRoute>
       } />
-      <Route path="/game/:gameId" element={
-        <ProtectedRoute><AdminDashboard /></ProtectedRoute>
-      } />
       <Route path="/game/:gameId/end" element={
         <ProtectedRoute><EndGame /></ProtectedRoute>
       } />
       <Route path="/game/:gameId/settlements" element={
         <ProtectedRoute><Settlements /></ProtectedRoute>
+      } />
+      <Route path="/game/:gameId" element={
+        <ProtectedRoute><AdminDashboard /></ProtectedRoute>
       } />
       <Route path="/history" element={
         <ProtectedRoute><History /></ProtectedRoute>
