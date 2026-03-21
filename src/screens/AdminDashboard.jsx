@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
@@ -60,9 +60,10 @@ export default function AdminDashboard() {
     setLoading(false)
   }, [gameId])
 
+  const channelRef = React.useRef(null)
+
   useEffect(() => {
     loadData()
-    // Load all players for add-player modal
     if (user) {
       supabase.from('players').select('*').eq('user_id', user.id).order('name')
         .then(({ data }) => setAllPlayers(data || []))
@@ -73,8 +74,17 @@ export default function AdminDashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'games', filter: `id=eq.${gameId}` }, loadData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses', filter: `game_id=eq.${gameId}` }, loadData)
       .subscribe()
+    channelRef.current = channel
     return () => supabase.removeChannel(channel)
   }, [gameId, loadData, user])
+
+  function goToEndGame() {
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current)
+      channelRef.current = null
+    }
+    navigate(`/game/${gameId}/end`)
+  }
 
   const rate = game?.chips_per_20 || 20
   const ilsToChips = (ils) => Math.round(ils / 20 * rate)
@@ -287,7 +297,7 @@ export default function AdminDashboard() {
         <div style={{ display: 'flex', gap: 4 }}>
           <button className="btn btn-ghost btn-sm" style={{ padding: '8px' }} onClick={shareViewerLink}><Share2 size={15} /></button>
           <button className="btn btn-ghost btn-sm" style={{ padding: '8px' }} onClick={() => navigate(`/view/${game.viewer_token}`)}><Eye size={15} /></button>
-          <button className="btn btn-primary btn-sm" style={{ padding: '8px 12px', fontSize: '0.85rem' }} onClick={() => { window.location.href = `/game/${gameId}/end` }}>
+          <button className="btn btn-primary btn-sm" style={{ padding: '8px 12px', fontSize: '0.85rem' }} onClick={goToEndGame}>
             <Flag size={13} /> סיום
           </button>
         </div>
@@ -489,7 +499,7 @@ export default function AdminDashboard() {
         </div>
 
         <button className="btn btn-primary btn-lg" style={{ width: '100%' }}
-          onClick={() => { window.location.href = `/game/${gameId}/end` }}>
+          onClick={goToEndGame}>
           <Flag size={18} /> סיים משחק
         </button>
       </div>
