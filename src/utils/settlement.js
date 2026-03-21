@@ -52,12 +52,42 @@ export function computeSettlements(players) {
  * Given game_players with ending_chips set and their buyins,
  * compute balances for each player.
  */
-export function computeBalances(gamePlayers, buyins) {
+/**
+ * Compute balances including expenses.
+ * @param {Array} gamePlayers
+ * @param {Array} buyins
+ * @param {number} rate - chips_per_20
+ * @param {Array} expenses - shared expenses
+ */
+export function computeBalances(gamePlayers, buyins, rate = 20, expenses = []) {
   return gamePlayers.map(gp => {
     const playerBuyins = buyins.filter(b => b.game_player_id === gp.id && !b.deleted_at)
     const totalBuyinsIls = playerBuyins.reduce((sum, b) => sum + b.amount_ils, 0)
     const endingChips = gp.ending_chips ?? 0
-    const balance = endingChips - totalBuyinsIls
+    const endingIls = Math.round(endingChips / rate * 20)
+
+    // Calculate expense balance for this player
+    let expenseBalance = 0
+    expenses.forEach(exp => {
+      const splitAmong = exp.split_among || []
+      if (splitAmong.length === 0) return
+      const share = Math.round(exp.amount / splitAmong.length)
+
+      // If this player paid — they receive money from others
+      if (exp.paid_by_name === gp.player_name) {
+        // They paid the full amount, others owe them their share
+        const othersShare = splitAmong.filter(n => n !== gp.player_name).length * share
+        expenseBalance += othersShare
+        // If they're also in the split, they owe themselves (cancel out)
+      }
+
+      // If this player is in the split — they owe their share
+      if (splitAmong.includes(gp.player_name) && exp.paid_by_name !== gp.player_name) {
+        expenseBalance -= share
+      }
+    })
+
+    const balance = endingIls - totalBuyinsIls + expenseBalance
 
     return {
       id: gp.id,
@@ -66,6 +96,8 @@ export function computeBalances(gamePlayers, buyins) {
       totalBuyinsIls,
       buysCount: playerBuyins.length,
       endingChips,
+      endingIls,
+      expenseBalance,
       balance,
     }
   })
