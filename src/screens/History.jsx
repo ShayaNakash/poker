@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns'
+import { useAuth } from '../lib/authContext'
+import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import { ChevronRight, TrendingUp, TrendingDown, Minus, Calendar } from 'lucide-react'
 
 export default function History() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [players, setPlayers] = useState([])
   const [allGamePlayers, setAllGamePlayers] = useState([])
@@ -21,16 +23,39 @@ export default function History() {
   }, [])
 
   async function loadData() {
+    // Load only this user's games
+    const { data: g } = await supabase
+      .from('games')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+
+    const gameIds = (g || []).map(x => x.id)
+
+    if (gameIds.length === 0) {
+      setAllGames([])
+      setLoading(false)
+      return
+    }
+
+    const settlementIds = []
+    // Will filter payments after loading settlements
+
     const [
-      { data: pl }, { data: gp }, { data: b }, { data: g }, { data: s }, { data: p }
+      { data: pl }, { data: gp }, { data: b }, { data: s }
     ] = await Promise.all([
-      supabase.from('players').select('*').order('name'),
-      supabase.from('game_players').select('*'),
-      supabase.from('buyins').select('*'),
-      supabase.from('games').select('*').order('created_at', { ascending: false }),
-      supabase.from('settlements').select('*'),
-      supabase.from('settlement_payments').select('*'),
+      supabase.from('players').select('*').eq('user_id', user.id).order('name'),
+      supabase.from('game_players').select('*').in('game_id', gameIds),
+      supabase.from('buyins').select('*').in('game_id', gameIds),
+      supabase.from('settlements').select('*').in('game_id', gameIds),
     ])
+
+    // Load payments only for this user's settlements
+    const sIds = (s || []).map(x => x.id)
+    const { data: p } = sIds.length > 0
+      ? await supabase.from('settlement_payments').select('*').in('settlement_id', sIds)
+      : { data: [] }
+
     setPlayers(pl || [])
     setAllGamePlayers(gp || [])
     setAllBuyins(b || [])
