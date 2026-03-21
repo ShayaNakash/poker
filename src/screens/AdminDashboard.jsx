@@ -40,6 +40,7 @@ export default function AdminDashboard() {
 
   // Expense modal
   const [expenseModal, setExpenseModal] = useState(false)
+  const [editingExpense, setEditingExpense] = useState(null)
   const [expensePaidBy, setExpensePaidBy] = useState('')
   const [expenseDesc, setExpenseDesc] = useState('')
   const [expenseAmount, setExpenseAmount] = useState('')
@@ -194,31 +195,51 @@ export default function AdminDashboard() {
     showToast(`${playerName} נוסף למשחק ✓`, 'success')
   }
 
-  // Add expense
+  // Add or edit expense
   async function addExpense() {
     const amount = parseInt(expenseAmount)
     if (!expensePaidBy) { showToast('בחר מי שילם', 'error'); return }
     if (!amount || amount <= 0) { showToast('הכנס סכום תקין', 'error'); return }
     if (expenseSplitAmong.length === 0) { showToast('בחר מי חולק בהוצאה', 'error'); return }
 
-    const { error } = await supabase.from('expenses').insert({
-      game_id: gameId,
-      paid_by_name: expensePaidBy,
-      description: expenseDesc || 'קניות',
-      amount,
-      split_among: expenseSplitAmong,
-    })
+    if (editingExpense) {
+      // Edit existing
+      const { error } = await supabase.from('expenses').update({
+        paid_by_name: expensePaidBy,
+        description: expenseDesc || 'קניות',
+        amount,
+        split_among: expenseSplitAmong,
+      }).eq('id', editingExpense.id)
+      if (error) { showToast('שגיאה בעדכון', 'error'); return }
+      showToast('הוצאה עודכנה ✓', 'success')
+    } else {
+      // New expense
+      const { error } = await supabase.from('expenses').insert({
+        game_id: gameId,
+        paid_by_name: expensePaidBy,
+        description: expenseDesc || 'קניות',
+        amount,
+        split_among: expenseSplitAmong,
+      })
+      if (error) { showToast('שגיאה בהוספת הוצאה', 'error'); return }
+      showToast(`הוצאה ₪${amount} נרשמה ✓`, 'success')
+    }
 
-    if (error) { showToast('שגיאה בהוספת הוצאה', 'error'); return }
-
-    setExpenses(prev => [...prev, { paid_by_name: expensePaidBy, description: expenseDesc, amount, split_among: expenseSplitAmong }])
     setExpenseModal(false)
+    setEditingExpense(null)
     setExpensePaidBy('')
     setExpenseDesc('')
     setExpenseAmount('')
     setExpenseSplitAmong([])
-    showToast(`הוצאה ₪${amount} נרשמה ✓`, 'success')
     loadData()
+  }
+
+  async function deleteExpense(expense) {
+    if (!window.confirm(`למחוק הוצאה של ₪${expense.amount}?`)) return
+    const { error } = await supabase.from('expenses').delete().eq('id', expense.id)
+    if (error) { showToast('שגיאה במחיקה', 'error'); return }
+    setExpenses(prev => prev.filter(e => e.id !== expense.id))
+    showToast('הוצאה נמחקה ✓', 'success')
   }
 
   function toggleSplitPlayer(name) {
@@ -318,12 +339,39 @@ export default function AdminDashboard() {
               🛒 הוצאות משותפות
             </div>
             {expenses.map((e, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: 'var(--text2)', padding: '2px 0' }}>
-                <span>{e.paid_by_name} שילם עבור {e.description || 'קניות'} ({e.split_among?.length || 0} משתתפים)</span>
-                <strong style={{ color: 'var(--gold)' }}>₪{e.amount}</strong>
+              <div key={e.id || i} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                fontSize: '0.82rem', color: 'var(--text2)', padding: '5px 0',
+                borderBottom: '1px solid rgba(212,168,83,0.1)',
+              }}>
+                <span>{e.paid_by_name} · {e.description || 'קניות'} ({e.split_among?.length || 0} משתתפים)</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <strong style={{ color: 'var(--gold)' }}>₪{e.amount}</strong>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ padding: '3px 6px' }}
+                    onClick={() => {
+                      setExpensePaidBy(e.paid_by_name)
+                      setExpenseDesc(e.description || '')
+                      setExpenseAmount(String(e.amount))
+                      setExpenseSplitAmong(e.split_among || [])
+                      setEditingExpense(e)
+                      setExpenseModal(true)
+                    }}
+                  >
+                    <Edit2 size={13} />
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ padding: '3px 6px', color: 'var(--red)' }}
+                    onClick={() => deleteExpense(e)}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               </div>
             ))}
-            <div style={{ borderTop: '1px solid rgba(212,168,83,0.2)', marginTop: 6, paddingTop: 6, display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+            <div style={{ marginTop: 6, paddingTop: 6, display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
               <span style={{ color: 'var(--text3)' }}>סה"כ הוצאות</span>
               <strong style={{ color: 'var(--gold)' }}>₪{totalExpenses()}</strong>
             </div>
@@ -574,9 +622,11 @@ export default function AdminDashboard() {
 
       {/* Expense modal */}
       {expenseModal && (
-        <div className="modal-overlay" onClick={() => setExpenseModal(false)}>
+        <div className="modal-overlay" onClick={() => { setExpenseModal(false); setEditingExpense(null) }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-title"><ShoppingCart size={18} /> הוצאה משותפת</div>
+            <div className="modal-title">
+              <ShoppingCart size={18} /> {editingExpense ? 'עריכת הוצאה' : 'הוצאה משותפת'}
+            </div>
 
             <div className="form-group">
               <label className="form-label">מי שילם?</label>
@@ -649,7 +699,7 @@ export default function AdminDashboard() {
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={addExpense}>
                 שמור הוצאה
               </button>
-              <button className="btn btn-ghost" onClick={() => setExpenseModal(false)}>ביטול</button>
+              <button className="btn btn-ghost" onClick={() => { setExpenseModal(false); setEditingExpense(null) }}>ביטול</button>
             </div>
           </div>
         </div>
