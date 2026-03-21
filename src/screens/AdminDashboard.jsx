@@ -3,10 +3,11 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
 import { useAuth } from '../lib/authContext'
+import { computeSettlements, computeBalances } from '../utils/settlement'
 import { format } from 'date-fns'
 import {
   ChevronRight, Flag, Share2, ChevronDown, Plus, Clock,
-  Edit2, Trash2, Lock, Eye, UserPlus, ShoppingCart
+  Edit2, Trash2, Lock, Eye, UserPlus, ShoppingCart, Trophy, AlertTriangle
 } from 'lucide-react'
 
 const QUICK_AMOUNTS = [20, 40, 60, 100, 200]
@@ -23,6 +24,7 @@ export default function AdminDashboard() {
   const [expenses, setExpenses] = useState([])
   const [allPlayers, setAllPlayers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [showEndGame, setShowEndGame] = useState(false)
   const [expandedPlayer, setExpandedPlayer] = useState(null)
 
   // Modals
@@ -83,7 +85,7 @@ export default function AdminDashboard() {
       supabase.removeChannel(channelRef.current)
       channelRef.current = null
     }
-    navigate(`/game/${gameId}/end`)
+    setShowEndGame(true)
   }
 
   const rate = game?.chips_per_20 || 20
@@ -260,6 +262,19 @@ export default function AdminDashboard() {
 
   if (loading) return <div className="loading-screen"><div className="spinner" /><span>טוען...</span></div>
   if (!game) return <div className="loading-screen"><span>משחק לא נמצא</span></div>
+
+  // ── Inline EndGame ──
+  if (showEndGame) {
+    return <InlineEndGame
+      game={game}
+      gamePlayers={gamePlayers}
+      buyins={buyins}
+      expenses={expenses}
+      onBack={() => setShowEndGame(false)}
+      onDone={() => navigate(`/game/${gameId}/settlements`)}
+      gameId={gameId}
+    />
+  }
 
   if (game.status !== 'active') {
     return (
@@ -714,6 +729,147 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Inline EndGame Component ──
+function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, gameId }) {
+  const showToast = useToast()
+  const rate = game?.chips_per_20 || 20
+  const [chips, setChips] = useState({})
+  const [saving, setSaving] = useState(false)
+
+  // Pre-fill existing
+  useEffect(() => {
+    const initial = {}
+    gamePlayers.forEach(p => { if (p.ending_chips != null) initial[p.id] = String(p.ending_chips) })
+    setChips(initial)
+  }, [gamePlayers])
+
+  const chipsToIls = (c) => Math.round(c / rate * 20)
+  const activeBuyins = (gpId) => buyins.filter(b => b.game_player_id === gpId && !b.deleted_at)
+  const playerTotal = (gpId) => activeBuyins(gpId).reduce((s, b) => s + b.amount_ils, 0)
+  const totalPot = () => buyins.filter(b => !b.deleted_at).reduce((s, b) => s + b.amount_ils, 0)
+  const totalChipsInGame = () => buyins.filter(b => !b.deleted_at).reduce((s, b) => s + b.chips, 0)
+  const totalChipsEntered = () => Object.values(chips).reduce((s, v) => s + (parseInt(v) || 0), 0)
+  const chipsBalanced = () => totalChipsEntered() === totalChipsInGame()
+  const profitLoss = (gpId) => chipsToIls(parseInt(chips[gpId]) || 0) - playerTotal(gpId)
+
+  async function endGame() {
+    const missing = gamePlayers.filter(gp => !chips[gp.id] && chips[gp.id] !== '0')
+    if (missing.length > 0) { showToast(`חסרים צ'יפים עבור: ${missing.map(p => p.player_name).join(', ')}`, 'error'); return }
+
+    setSaving(true)
+    try {
+      for (const gp of gamePlayers) {
+        await supabase.from('game_players').update({ ending_chips: parseInt(chips[gp.id]) || 0 }).eq('id', gp.id)
+      }
+
+      const updatedPlayers = gamePlayers.map(gp => ({ ...gp, ending_chips: parseInt(chips[gp.id]) || 0 }))
+      const balances = computeBalances(updatedPlayers, buyins, rate, expenses)
+      const transfers = computeSettlements(balances)
+
+      if (transfers.length > 0) {
+        await supabase.from('settlements').insert(transfers.map(t => ({
+          game_id: gameId,
+          from_player_id: t.from_player_id, to_player_id: t.to_player_id,
+          from_player_name: t.from_player_name, to_player_name: t.to_player_name,
+          required_amount: t.required_amount,
+        })))
+      }
+
+      await supabase.from('games').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', gameId)
+      showToast('המשחק הסתיים ✓', 'success')
+      onDone()
+    } catch (err) {
+      showToast('שגיאה בסיום המשחק', 'error')
+      console.error(err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const pot = totalPot()
+  const totalChipsGame = totalChipsInGame()
+  const chipsEntered = totalChipsEntered()
+  const balanced = chipsBalanced()
+
+  return (
+    <div className="screen">
+      <div className="header">
+        <button className="btn btn-ghost btn-sm" onClick={onBack}><ChevronRight size={18} /></button>
+        <div><div className="header-title">סיום משחק</div><div className="header-sub">הכנס צ'יפים סיום</div></div>
+        <div style={{ width: 60 }} />
+      </div>
+      <div className="content">
+        <div className="card" style={{ marginBottom: 16, textAlign: 'center' }}>
+          <div style={{ color: 'var(--text2)', fontSize: '0.85rem', marginBottom: 4 }}>סה"כ קופה</div>
+          <div style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--gold)' }}>₪{pot}</div>
+          {rate !== 20 && <div style={{ color: 'var(--text3)', fontSize: '0.8rem', marginTop: 4 }}>= {totalChipsGame} צ'יפים · יחס: ₪20 = {rate} צ'יפים</div>}
+        </div>
+
+        <div style={{
+          background: balanced ? 'rgba(46,204,113,0.1)' : chipsEntered > 0 ? 'rgba(231,76,60,0.1)' : 'var(--card)',
+          border: `1px solid ${balanced ? 'var(--green)' : chipsEntered > 0 ? 'var(--red)' : 'var(--border)'}`,
+          borderRadius: 'var(--radius)', padding: '10px 14px', marginBottom: 16,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>סה"כ צ'יפים שהוכנסו</div>
+          <div style={{ fontWeight: 800, fontSize: '1.1rem', color: balanced ? 'var(--green)' : chipsEntered > 0 ? 'var(--red)' : 'var(--text3)' }}>
+            {chipsEntered} / {totalChipsGame} {balanced && '✓'}
+          </div>
+        </div>
+
+        {!balanced && chipsEntered > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--orange)', fontSize: '0.85rem', marginBottom: 12, padding: '8px 12px', background: 'rgba(230,126,34,0.1)', borderRadius: 'var(--radius-sm)' }}>
+            <AlertTriangle size={16} />
+            <span>{chipsEntered > totalChipsGame ? `יש ${chipsEntered - totalChipsGame} צ'יפים יותר` : `חסרים ${totalChipsGame - chipsEntered} צ'יפים`}</span>
+          </div>
+        )}
+
+        <div className="section-title">צ'יפים לפי שחקן</div>
+        {gamePlayers.map(gp => {
+          const total = playerTotal(gp.id)
+          const hasValue = chips[gp.id] !== undefined && chips[gp.id] !== ''
+          const pl = hasValue ? profitLoss(gp.id) : null
+
+          return (
+            <div key={gp.id} className="card" style={{ marginBottom: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontWeight: 700 }}>{gp.player_name}</div>
+                  <div style={{ color: 'var(--text2)', fontSize: '0.8rem' }}>השקיע: ₪{total}</div>
+                </div>
+                {pl !== null && (
+                  <div className={pl > 0 ? 'amount-pos' : pl < 0 ? 'amount-neg' : 'amount-zero'}>
+                    {pl > 0 ? '+' : ''}₪{pl}
+                  </div>
+                )}
+              </div>
+              <input
+                type="number" inputMode="numeric" placeholder="מספר צ'יפים..."
+                value={chips[gp.id] ?? ''}
+                onChange={e => setChips(prev => ({ ...prev, [gp.id]: e.target.value }))}
+              />
+            </div>
+          )
+        })}
+
+        <button
+          className="btn btn-primary btn-lg"
+          style={{ width: '100%', marginTop: 20 }}
+          onClick={endGame}
+          disabled={saving || !balanced}
+        >
+          {saving ? 'שומר...' : <><Trophy size={18} /> סיים וצור סילוקים</>}
+        </button>
+        {!balanced && chipsEntered > 0 && (
+          <div style={{ textAlign: 'center', color: 'var(--text3)', fontSize: '0.8rem', marginTop: 8 }}>
+            סה"כ הצ'יפים חייב להיות {totalChipsGame}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
