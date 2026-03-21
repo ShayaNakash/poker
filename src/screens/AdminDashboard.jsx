@@ -287,7 +287,7 @@ export default function AdminDashboard() {
         <div style={{ display: 'flex', gap: 4 }}>
           <button className="btn btn-ghost btn-sm" style={{ padding: '8px' }} onClick={shareViewerLink}><Share2 size={15} /></button>
           <button className="btn btn-ghost btn-sm" style={{ padding: '8px' }} onClick={() => navigate(`/view/${game.viewer_token}`)}><Eye size={15} /></button>
-          <button className="btn btn-primary btn-sm" style={{ padding: '8px 12px', fontSize: '0.85rem' }} onClick={() => navigate(`/game/${gameId}/end`)}>
+          <button className="btn btn-primary btn-sm" style={{ padding: '8px 12px', fontSize: '0.85rem' }} onClick={() => { window.location.href = `/game/${gameId}/end` }}>
             <Flag size={13} /> סיום
           </button>
         </div>
@@ -489,7 +489,7 @@ export default function AdminDashboard() {
         </div>
 
         <button className="btn btn-primary btn-lg" style={{ width: '100%' }}
-          onClick={() => navigate(`/game/${gameId}/end`)}>
+          onClick={() => { window.location.href = `/game/${gameId}/end` }}>
           <Flag size={18} /> סיים משחק
         </button>
       </div>
