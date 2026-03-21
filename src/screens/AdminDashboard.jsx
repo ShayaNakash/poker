@@ -263,11 +263,11 @@ export default function AdminDashboard() {
             {rateLabel && <span style={{ color: 'var(--text3)', marginRight: 6 }}>· {rateLabel}</span>}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button className="btn btn-ghost btn-sm" onClick={shareViewerLink}><Share2 size={16} /></button>
-          <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/view/${game.viewer_token}`)}><Eye size={16} /></button>
-          <button className="btn btn-primary btn-sm" onClick={() => navigate(`/game/${gameId}/end`)}>
-            <Flag size={14} /> סיום
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button className="btn btn-ghost btn-sm" style={{ padding: '8px' }} onClick={shareViewerLink}><Share2 size={15} /></button>
+          <button className="btn btn-ghost btn-sm" style={{ padding: '8px' }} onClick={() => navigate(`/view/${game.viewer_token}`)}><Eye size={15} /></button>
+          <button className="btn btn-primary btn-sm" style={{ padding: '8px 12px', fontSize: '0.85rem' }} onClick={() => navigate(`/game/${gameId}/end`)}>
+            <Flag size={13} /> סיום
           </button>
         </div>
       </div>
