@@ -29,6 +29,7 @@ export default function Settlements() {
   const [game, setGame] = useState(null)
   const [gamePlayers, setGamePlayers] = useState([])
   const [buyins, setBuyins] = useState([])
+  const [expenses, setExpenses] = useState([])
   const [settlements, setSettlements] = useState([])
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
@@ -49,15 +50,17 @@ export default function Settlements() {
   }, [gameId])
 
   async function loadData() {
-    const [{ data: g }, { data: gp }, { data: b }, { data: s }, { data: p }] = await Promise.all([
+    const [{ data: g }, { data: gp }, { data: b }, { data: s }, { data: p }, { data: e }] = await Promise.all([
       supabase.from('games').select('*').eq('id', gameId).single(),
       supabase.from('game_players').select('*').eq('game_id', gameId),
       supabase.from('buyins').select('*').eq('game_id', gameId),
       supabase.from('settlements').select('*').eq('game_id', gameId),
       supabase.from('settlement_payments').select('*'),
+      supabase.from('expenses').select('*').eq('game_id', gameId),
     ])
     setGame(g)
     setGamePlayers(gp || [])
+    setExpenses(e || [])
     setBuyins(b || [])
     setSettlements(s || [])
     setPayments(p || [])
@@ -218,26 +221,60 @@ export default function Settlements() {
                 const totalBuyins = activeBuyinsArr.reduce((s, b) => s + b.amount_ils, 0)
                 const ending = gp.ending_chips ?? 0
                 const endingIls = chipsToIls(ending)
-                const pl = endingIls - totalBuyins
+                const pokerPL = endingIls - totalBuyins
                 const medals = ['🥇', '🥈', '🥉']
+
+                // Calculate expense balance
+                let expenseBalance = 0
+                expenses.forEach(exp => {
+                  const splitAmong = exp.split_among || []
+                  if (splitAmong.length === 0) return
+                  const share = Math.round(exp.amount / splitAmong.length)
+                  if (exp.paid_by_name === gp.player_name) {
+                    const othersShare = splitAmong.filter(n => n !== gp.player_name).length * share
+                    expenseBalance += othersShare
+                  }
+                  if (splitAmong.includes(gp.player_name) && exp.paid_by_name !== gp.player_name) {
+                    expenseBalance -= share
+                  }
+                })
+
+                const totalPL = pokerPL + expenseBalance
 
                 return (
                   <div key={gp.id} className="card" style={{ marginBottom: 10 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span style={{ fontSize: '1.3rem' }}>{medals[i] || ''}</span>
                         <div>
                           <div style={{ fontWeight: 700 }}>{gp.player_name}</div>
                           <div style={{ fontSize: '0.8rem', color: 'var(--text2)' }}>
                             השקיע ₪{totalBuyins} · סיים {ending} צ'יפים
-                            {rate !== 20 && ` (₪${endingIls})`}
                           </div>
                         </div>
                       </div>
-                      <div className={pl > 0 ? 'amount-pos' : pl < 0 ? 'amount-neg' : 'amount-zero'}
+                      <div className={totalPL > 0 ? 'amount-pos' : totalPL < 0 ? 'amount-neg' : 'amount-zero'}
                         style={{ fontSize: '1.3rem' }}>
-                        {pl > 0 ? '+' : ''}₪{pl}
+                        {totalPL > 0 ? '+' : ''}₪{totalPL}
                       </div>
+                    </div>
+
+                    {/* Breakdown */}
+                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                        <span style={{ color: 'var(--text3)' }}>🃏 רווח/הפסד פוקר</span>
+                        <span className={pokerPL > 0 ? 'amount-pos' : pokerPL < 0 ? 'amount-neg' : 'amount-zero'}>
+                          {pokerPL > 0 ? '+' : ''}₪{pokerPL}
+                        </span>
+                      </div>
+                      {expenseBalance !== 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                          <span style={{ color: 'var(--text3)' }}>🛒 {expenseBalance > 0 ? 'מגיע מקניות' : 'חייב מקניות'}</span>
+                          <span className={expenseBalance > 0 ? 'amount-pos' : 'amount-neg'}>
+                            {expenseBalance > 0 ? '+' : ''}₪{expenseBalance}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )
