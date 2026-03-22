@@ -851,11 +851,9 @@ function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, ga
     return allChips - exitedChips
   }
 
-  // Chips entered = manually entered + early exited players' chips
+  // Chips entered = only manually entered chips (exited players already subtracted from totalChipsInGame)
   const totalChipsEntered = () => {
-    const manual = Object.values(chips).reduce((s, v) => s + (parseInt(v) || 0), 0)
-    const exited = gamePlayers.filter(gp => gp.exited_at).reduce((s, gp) => s + (gp.ending_chips || 0), 0)
-    return manual + exited
+    return Object.values(chips).reduce((s, v) => s + (parseInt(v) || 0), 0)
   }
 
   const chipsBalanced = () => totalChipsEntered() === totalChipsInGame()
