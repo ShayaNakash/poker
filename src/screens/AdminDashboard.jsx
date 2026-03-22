@@ -81,14 +81,12 @@ export default function AdminDashboard() {
   }, [gameId, loadData, user])
 
   function goToEndGame() {
-  console.log('goToEndGame called', showEndGame)
-  if (channelRef.current) {
-    supabase.removeChannel(channelRef.current)
-    channelRef.current = null
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current)
+      channelRef.current = null
+    }
+    setShowEndGame(true)
   }
-  setShowEndGame(true)
-  console.log('setShowEndGame called')
-}
 
   const rate = game?.chips_per_20 || 20
   const ilsToChips = (ils) => Math.round(ils / 20 * rate)
@@ -256,6 +254,28 @@ export default function AdminDashboard() {
     showToast('הוצאה נמחקה ✓', 'success')
   }
 
+  // Early exit
+  const [earlyExitModal, setEarlyExitModal] = useState(null)
+  const [earlyExitChips, setEarlyExitChips] = useState('')
+
+  async function confirmEarlyExit() {
+    const chips = parseInt(earlyExitChips)
+    if (isNaN(chips) || chips < 0) { showToast('הכנס מספר צ\'יפים תקין', 'error'); return }
+    const { error } = await supabase
+      .from('game_players')
+      .update({ ending_chips: chips, exited_at: new Date().toISOString() })
+      .eq('id', earlyExitModal.id)
+    if (error) { showToast('שגיאה', 'error'); return }
+    await supabase.from('audit_logs').insert({
+      game_id: gameId, action: 'early_exit', entity_type: 'game_player',
+      entity_id: earlyExitModal.id,
+      after_data: { player: earlyExitModal.player_name, ending_chips: chips }
+    })
+    setEarlyExitModal(null); setEarlyExitChips('')
+    showToast(`${earlyExitModal.player_name} יצא עם ${chips} צ'יפים ✓`, 'success')
+    loadData()
+  }
+
   function toggleSplitPlayer(name) {
     setExpenseSplitAmong(prev =>
       prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
@@ -414,6 +434,32 @@ export default function AdminDashboard() {
           const count = pBuyins.length
           const last = pBuyins[pBuyins.length - 1]
           const isExpanded = expandedPlayer === gp.id
+          const hasExited = !!gp.exited_at
+
+          // If player exited early
+          if (hasExited) {
+            const endingIls = Math.round((gp.ending_chips || 0) / rate * 20)
+            const pl = endingIls - total
+            return (
+              <div key={gp.id} className="player-card" style={{ opacity: 0.7, border: '1px solid var(--border2)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div className="player-name-big" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {gp.player_name}
+                      <span className="badge badge-gray" style={{ fontSize: '0.7rem' }}>יצא</span>
+                    </div>
+                    <div className="player-stats-row">
+                      <div className="stat-pill">השקיע: ₪<strong>{total}</strong></div>
+                      <div className="stat-pill">סיים: <strong>{gp.ending_chips}</strong> צ'יפים</div>
+                    </div>
+                  </div>
+                  <div className={pl > 0 ? 'amount-pos' : pl < 0 ? 'amount-neg' : 'amount-zero'} style={{ fontSize: '1.2rem' }}>
+                    {pl > 0 ? '+' : ''}₪{pl}
+                  </div>
+                </div>
+              </div>
+            )
+          }
 
           return (
             <div key={gp.id} className={`player-card ${count > 0 ? 'active-player' : ''}`}>
@@ -454,6 +500,13 @@ export default function AdminDashboard() {
                 onClick={() => { setBuyinModal(gp.id); setCustomAmount('') }}
               >
                 <Plus size={13} /> סכום מותאם
+              </button>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ width: '100%', marginTop: 4, fontSize: '0.78rem', color: 'var(--orange)' }}
+                onClick={() => { setEarlyExitModal(gp); setEarlyExitChips('') }}
+              >
+                🚪 יציאה מוקדמת
               </button>
 
               {isExpanded && (
@@ -731,11 +784,50 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+      {/* Early exit modal */}
+      {earlyExitModal && (
+        <div className="modal-overlay" onClick={() => setEarlyExitModal(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-title">🚪 יציאה מוקדמת — {earlyExitModal.player_name}</div>
+            <div style={{ color: 'var(--text2)', fontSize: '0.9rem', marginBottom: 16 }}>
+              השקיע: ₪{playerTotal(earlyExitModal.id)} · {activeBuyins(earlyExitModal.id).length} buy-ins
+            </div>
+            <div className="form-group">
+              <label className="form-label">כמה צ'יפים הוא מחזיר לקופה?</label>
+              <input
+                type="number" inputMode="numeric" placeholder="0"
+                value={earlyExitChips}
+                onChange={e => setEarlyExitChips(e.target.value)}
+                autoFocus
+                onKeyDown={e => e.key === 'Enter' && confirmEarlyExit()}
+              />
+              {earlyExitChips !== '' && (
+                <div style={{ marginTop: 8, fontSize: '0.85rem' }}>
+                  {(() => {
+                    const chips = parseInt(earlyExitChips) || 0
+                    const endingIls = Math.round(chips / rate * 20)
+                    const pl = endingIls - playerTotal(earlyExitModal.id)
+                    return (
+                      <span className={pl > 0 ? 'amount-pos' : pl < 0 ? 'amount-neg' : 'amount-zero'}>
+                        תוצאה: {pl > 0 ? '+' : ''}₪{pl}
+                      </span>
+                    )
+                  })()}
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={confirmEarlyExit}>
+                אשר יציאה
+              </button>
+              <button className="btn btn-ghost" onClick={() => setEarlyExitModal(null)}>ביטול</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
-
-// ── Inline EndGame Component ──
 function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, gameId }) {
   const showToast = useToast()
   const rate = game?.chips_per_20 || 20
@@ -754,7 +846,14 @@ function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, ga
   const playerTotal = (gpId) => activeBuyins(gpId).reduce((s, b) => s + b.amount_ils, 0)
   const totalPot = () => buyins.filter(b => !b.deleted_at).reduce((s, b) => s + b.amount_ils, 0)
   const totalChipsInGame = () => buyins.filter(b => !b.deleted_at).reduce((s, b) => s + b.chips, 0)
-  const totalChipsEntered = () => Object.values(chips).reduce((s, v) => s + (parseInt(v) || 0), 0)
+
+  // Chips entered = manually entered + early exited players' chips
+  const totalChipsEntered = () => {
+    const manual = Object.values(chips).reduce((s, v) => s + (parseInt(v) || 0), 0)
+    const exited = gamePlayers.filter(gp => gp.exited_at).reduce((s, gp) => s + (gp.ending_chips || 0), 0)
+    return manual + exited
+  }
+
   const chipsBalanced = () => totalChipsEntered() === totalChipsInGame()
   const profitLoss = (gpId) => chipsToIls(parseInt(chips[gpId]) || 0) - playerTotal(gpId)
 
@@ -832,6 +931,28 @@ function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, ga
 
         <div className="section-title">צ'יפים לפי שחקן</div>
         {gamePlayers.map(gp => {
+          // Skip players who already exited early
+          if (gp.exited_at) {
+            const endingIls = Math.round((gp.ending_chips || 0) / rate * 20)
+            const pl = endingIls - playerTotal(gp.id)
+            return (
+              <div key={gp.id} className="card" style={{ marginBottom: 10, opacity: 0.6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {gp.player_name}
+                      <span className="badge badge-gray" style={{ fontSize: '0.7rem' }}>יצא מוקדם</span>
+                    </div>
+                    <div style={{ color: 'var(--text2)', fontSize: '0.8rem' }}>סיים עם {gp.ending_chips} צ'יפים</div>
+                  </div>
+                  <div className={pl > 0 ? 'amount-pos' : pl < 0 ? 'amount-neg' : 'amount-zero'}>
+                    {pl > 0 ? '+' : ''}₪{pl}
+                  </div>
+                </div>
+              </div>
+            )
+          }
+
           const total = playerTotal(gp.id)
           const hasValue = chips[gp.id] !== undefined && chips[gp.id] !== ''
           const pl = hasValue ? profitLoss(gp.id) : null
