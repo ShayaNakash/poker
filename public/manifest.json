@@ -1,7 +1,7 @@
 {
-  "name": "פוקר חברים",
-  "short_name": "פוקר",
-  "description": "ניהול משחקי פוקר מזומן",
+  "name": "פוקר עם החבר'ה",
+  "short_name": "פוקר חברים",
+  "description": "ניהול משחקי פוקר מזומן ביתיים",
   "theme_color": "#0a0e13",
   "background_color": "#0a0e13",
   "display": "standalone",
