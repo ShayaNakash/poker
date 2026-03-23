@@ -837,7 +837,12 @@ function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, ga
   // Pre-fill existing
   useEffect(() => {
     const initial = {}
-    gamePlayers.forEach(p => { if (p.ending_chips != null) initial[p.id] = String(p.ending_chips) })
+    gamePlayers.forEach(p => {
+      // Only pre-fill for non-exited players
+      if (!p.exited_at && p.ending_chips != null) {
+        initial[p.id] = String(p.ending_chips)
+      }
+    })
     setChips(initial)
   }, [gamePlayers])
 
