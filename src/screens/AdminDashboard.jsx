@@ -860,16 +860,24 @@ function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, ga
   const profitLoss = (gpId) => chipsToIls(parseInt(chips[gpId]) || 0) - playerTotal(gpId)
 
   async function endGame() {
-    const missing = gamePlayers.filter(gp => !chips[gp.id] && chips[gp.id] !== '0')
+    // Only check missing chips for players who haven't exited early
+    const missing = gamePlayers.filter(gp => !gp.exited_at && chips[gp.id] === undefined && chips[gp.id] !== '0')
     if (missing.length > 0) { showToast(`חסרים צ'יפים עבור: ${missing.map(p => p.player_name).join(', ')}`, 'error'); return }
 
     setSaving(true)
     try {
+      // Only update chips for players who haven't exited early
       for (const gp of gamePlayers) {
-        await supabase.from('game_players').update({ ending_chips: parseInt(chips[gp.id]) || 0 }).eq('id', gp.id)
+        if (!gp.exited_at) {
+          await supabase.from('game_players').update({ ending_chips: parseInt(chips[gp.id]) || 0 }).eq('id', gp.id)
+        }
       }
 
-      const updatedPlayers = gamePlayers.map(gp => ({ ...gp, ending_chips: parseInt(chips[gp.id]) || 0 }))
+      // Use existing ending_chips for exited players, manual input for others
+      const updatedPlayers = gamePlayers.map(gp => ({
+        ...gp,
+        ending_chips: gp.exited_at ? (gp.ending_chips || 0) : (parseInt(chips[gp.id]) || 0)
+      }))
       const balances = computeBalances(updatedPlayers, buyins, rate, expenses)
       const transfers = computeSettlements(balances)
 
