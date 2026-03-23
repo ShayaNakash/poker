@@ -17,40 +17,40 @@ export default function FeedbackScreen() {
   const showToast = useToast()
 
   const [type, setType] = useState('idea')
+  const [name, setName] = useState('')
+  const [contactEmail, setContactEmail] = useState(user?.email || '')
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
 
   async function sendFeedback() {
+    if (!name.trim()) { showToast('יש להכניס שם', 'error'); return }
+    if (!contactEmail.trim()) { showToast('יש להכניס אימייל ליצירת קשר', 'error'); return }
     if (!message.trim()) { showToast('יש לכתוב הודעה', 'error'); return }
 
     setSending(true)
     try {
-      // Save to DB
       await supabase.from('feedback').insert({
         user_id: user.id,
-        user_email: user.email,
+        user_email: contactEmail.trim(),
         type,
         message: message.trim(),
       })
 
-      // Send email via Edge Function
       const { data: { session } } = await supabase.auth.getSession()
-      const response = await fetch('https://lyyoktbmagggnrnbuhjq.supabase.co/functions/v1/send-feedback', {
+      await fetch('https://lyyoktbmagggnrnbuhjq.supabase.co/functions/v1/send-feedback', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
         },
-        body: JSON.stringify({ type, message: message.trim(), user_email: user.email }),
+        body: JSON.stringify({
+          type,
+          message: message.trim(),
+          user_email: contactEmail.trim(),
+          user_name: name.trim(),
+        }),
       })
-
-      const result = await response.json()
-      console.log('Edge function response:', result)
-
-      if (!response.ok) {
-        console.error('Edge function error:', result)
-      }
 
       setSent(true)
     } catch (err) {
@@ -118,10 +118,37 @@ export default function FeedbackScreen() {
           ))}
         </div>
 
-        {/* Message */}
+        {/* Name - required */}
+        <div className="form-group">
+          <label className="form-label">
+            שם <span style={{ color: 'var(--red)' }}>*</span>
+          </label>
+          <input
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="השם שלך"
+          />
+        </div>
+
+        {/* Contact email - required */}
+        <div className="form-group">
+          <label className="form-label">
+            אימייל ליצירת קשר <span style={{ color: 'var(--red)' }}>*</span>
+          </label>
+          <input
+            type="email"
+            value={contactEmail}
+            onChange={e => setContactEmail(e.target.value)}
+            placeholder="your@email.com"
+            style={{ direction: 'ltr', textAlign: 'right' }}
+          />
+        </div>
+
+        {/* Message - required */}
         <div className="form-group">
           <label className="form-label">
             {type === 'bug' ? 'תאר את התקלה' : type === 'idea' ? 'תאר את הרעיון' : 'הודעה'}
+            {' '}<span style={{ color: 'var(--red)' }}>*</span>
           </label>
           <textarea
             value={message}
@@ -142,7 +169,7 @@ export default function FeedbackScreen() {
           className="btn btn-primary btn-lg"
           style={{ width: '100%' }}
           onClick={sendFeedback}
-          disabled={sending || !message.trim()}
+          disabled={sending || !message.trim() || !name.trim() || !contactEmail.trim()}
         >
           {sending ? 'שולח...' : <><Send size={16} /> שלח פידבק</>}
         </button>
