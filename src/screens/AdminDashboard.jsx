@@ -846,16 +846,14 @@ function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, ga
   const playerTotal = (gpId) => activeBuyins(gpId).reduce((s, b) => s + b.amount_ils, 0)
   const totalPot = () => buyins.filter(b => !b.deleted_at).reduce((s, b) => s + b.amount_ils, 0)
 
-  // Total chips = all bought chips MINUS chips taken by early exited players
-  const totalChipsInGame = () => {
-    const allChips = buyins.filter(b => !b.deleted_at).reduce((s, b) => s + b.chips, 0)
-    const exitedChips = gamePlayers.filter(gp => gp.exited_at).reduce((s, gp) => s + (gp.ending_chips || 0), 0)
-    return allChips - exitedChips
-  }
+  // Total chips = all bought chips (no subtraction)
+  const totalChipsInGame = () => buyins.filter(b => !b.deleted_at).reduce((s, b) => s + b.chips, 0)
 
-  // Only manually entered chips for remaining players
+  // Chips entered = manually entered + early exited players' chips
   const totalChipsEntered = () => {
-    return Object.values(chips).reduce((s, v) => s + (parseInt(v) || 0), 0)
+    const manual = Object.values(chips).reduce((s, v) => s + (parseInt(v) || 0), 0)
+    const exited = gamePlayers.filter(gp => gp.exited_at).reduce((s, gp) => s + (gp.ending_chips || 0), 0)
+    return manual + exited
   }
 
   const chipsBalanced = () => totalChipsEntered() === totalChipsInGame()
