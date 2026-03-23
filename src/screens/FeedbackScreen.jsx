@@ -35,15 +35,21 @@ export default function FeedbackScreen() {
       })
 
       // Send email via Edge Function
-      const { data, error } = await supabase.functions.invoke('send-feedback', {
-        body: { type, message: message.trim(), user_email: user.email },
+      const { data: { session } } = await supabase.auth.getSession()
+      const response = await fetch('https://lyyoktbmagggnrnbuhjq.supabase.co/functions/v1/send-feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ type, message: message.trim(), user_email: user.email }),
       })
 
-      if (error) {
-        console.error('Edge function error:', error)
-        showToast(`שגיאה בשליחת מייל: ${error.message}`, 'error')
-      } else {
-        console.log('Edge function response:', data)
+      const result = await response.json()
+      console.log('Edge function response:', result)
+
+      if (!response.ok) {
+        console.error('Edge function error:', result)
       }
 
       setSent(true)
