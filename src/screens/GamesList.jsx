@@ -36,7 +36,7 @@ export default function GamesList() {
   }
 
   async function shareApp() {
-    const url = 'https://poker-three-coral.vercel.app'
+    const url = 'https://zugking.com'
     const text = 'ניהול משחקי פוקר מזומן — פוקר עם החבר\'ה 🃏'
     try { await navigator.share({ title: 'פוקר עם החבר\'ה', text, url }) }
     catch { await navigator.clipboard.writeText(url); showToast('קישור האפליקציה הועתק ✓', 'success') }
@@ -80,7 +80,7 @@ export default function GamesList() {
     <div className="screen">
       <div className="header">
         <div>
-          <div className="header-title">♠ פוקר עם החבר'ה</div>
+          <div className="header-title">♠ ZugKing</div>
           <div className="header-sub" style={{ color: 'var(--text3)', fontSize: '0.72rem' }}>
             {user.email}
           </div>
