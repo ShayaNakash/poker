@@ -26,7 +26,7 @@ export default function ResetPassword() {
     if (!email) { showToast('יש להכניס אימייל', 'error'); return }
     setLoading(true)
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://poker-three-coral.vercel.app/reset-password',
+      redirectTo: 'https://zugking.com/reset-password',
     })
     if (error) { showToast('שגיאה בשליחת האימייל', 'error') }
     else { setSent(true) }
@@ -78,7 +78,7 @@ export default function ResetPassword() {
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <div style={{ fontSize: '3rem', marginBottom: 8 }}>♠</div>
           <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--gold)' }}>
-            פוקר עם החבר'ה
+            ZugKing
           </div>
         </div>
 
