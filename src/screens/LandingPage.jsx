@@ -41,21 +41,18 @@ export default function LandingPage() {
         background: 'radial-gradient(ellipse at 50% 0%, rgba(212,168,83,0.08) 0%, transparent 70%)',
       }}>
         {/* Logo */}
-        <div style={{
-          width: 80, height: 80, borderRadius: '50%',
-          background: 'linear-gradient(135deg, var(--gold), var(--gold2))',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '2.2rem', marginBottom: 24,
-          boxShadow: '0 8px 32px rgba(212,168,83,0.3)',
-        }}>
-          ♠
+        <div style={{ marginBottom: 24 }}>
+          <img src="/logo.png" alt="ZugKing" style={{
+            width: 100, height: 100, borderRadius: 22,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          }} />
         </div>
 
         <h1 style={{
           fontSize: '2.2rem', fontWeight: 900,
           color: 'var(--text)', marginBottom: 12, lineHeight: 1.2,
         }}>
-          פוקר עם החבר'ה
+          ZugKing
         </h1>
 
         <p style={{
@@ -91,7 +88,7 @@ export default function LandingPage() {
           textTransform: 'uppercase', letterSpacing: '0.1em',
           textAlign: 'center', marginBottom: 24,
         }}>
-          למה פוקר עם החבר'ה?
+          למה ZugKing?
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -136,7 +133,7 @@ export default function LandingPage() {
         </button>
 
         <div style={{ textAlign: 'center', marginTop: 16, color: 'var(--text3)', fontSize: '0.8rem' }}>
-          בחינם לחלוטין · בלי כרטיס אשראי · עובד מהטלפון
+          בחינם לתמיד · © IdaNakash · עובד מהטלפון
         </div>
       </div>
     </div>
