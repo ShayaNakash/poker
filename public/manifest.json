@@ -1,6 +1,6 @@
 {
-  "name": "פוקר עם החבר'ה",
-  "short_name": "פוקר חברים",
+  "name": "ZugKing",
+  "short_name": "ZugKing",
   "description": "ניהול משחקי פוקר מזומן ביתיים",
   "theme_color": "#0a0e13",
   "background_color": "#0a0e13",
@@ -10,9 +10,9 @@
   "start_url": "/",
   "icons": [
     {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/logo.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]
