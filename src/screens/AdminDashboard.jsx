@@ -987,8 +987,14 @@ function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, ga
               </div>
               <input
                 type="number" inputMode="numeric" placeholder="מספר צ'יפים..."
+                min="0"
                 value={chips[gp.id] ?? ''}
-                onChange={e => setChips(prev => ({ ...prev, [gp.id]: e.target.value }))}
+                onChange={e => {
+                  const val = e.target.value
+                  if (val === '' || parseInt(val) >= 0) {
+                    setChips(prev => ({ ...prev, [gp.id]: val }))
+                  }
+                }}
               />
             </div>
           )
