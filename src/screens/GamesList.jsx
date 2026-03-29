@@ -5,7 +5,9 @@ import { useAuth } from '../lib/authContext'
 import { useToast } from '../lib/toast'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
-import { Plus, Lock, Play, ChevronLeft, BarChart2, LogOut, Trophy, Trash2, Share2, MessageCircle } from 'lucide-react'
+import { Plus, Lock, Play, ChevronLeft, BarChart2, LogOut, Trophy, Trash2, Share2, MessageCircle, Shield } from 'lucide-react'
+
+const ADMIN_EMAIL = 'shayanakash1@gmail.com'
 
 export default function GamesList() {
   const navigate = useNavigate()
@@ -95,6 +97,11 @@ export default function GamesList() {
           <button className="btn btn-ghost btn-sm" onClick={() => navigate('/feedback')} title="פידבק">
             <MessageCircle size={16} />
           </button>
+          {user?.email === ADMIN_EMAIL && (
+            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/admin-stats')} title="Admin">
+              <Shield size={16} color="var(--gold)" />
+            </button>
+          )}
           <button className="btn btn-ghost btn-sm" onClick={handleSignOut}>
             <LogOut size={16} />
           </button>
