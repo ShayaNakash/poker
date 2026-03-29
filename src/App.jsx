@@ -6,6 +6,7 @@ import AuthScreen from './screens/AuthScreen'
 import ResetPassword from './screens/ResetPassword'
 import LandingPage from './screens/LandingPage'
 import FeedbackScreen from './screens/FeedbackScreen'
+import AdminStats from './screens/AdminStats'
 import GamesList from './screens/GamesList'
 import CreateGame from './screens/CreateGame'
 import AdminDashboard from './screens/AdminDashboard'
@@ -20,6 +21,13 @@ function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>
   if (!user) return <Navigate to="/welcome" replace />
+  return children
+}
+
+// Wrapper that renders children at exact path only
+function ExactRoute({ path, children }) {
+  const location = window.location.pathname
+  if (!location.startsWith('/game/')) return null
   return children
 }
 
@@ -61,20 +69,23 @@ function AppRoutes() {
       <Route path="/create-game" element={
         <ProtectedRoute><CreateGame /></ProtectedRoute>
       } />
+      <Route path="/game/:gameId" element={
+        <ProtectedRoute><AdminDashboard /></ProtectedRoute>
+      } />
       <Route path="/game/:gameId/end" element={
         <ProtectedRoute><EndGame /></ProtectedRoute>
       } />
       <Route path="/game/:gameId/settlements" element={
         <ProtectedRoute><Settlements /></ProtectedRoute>
       } />
-      <Route path="/game/:gameId" element={
-        <ProtectedRoute><AdminDashboard /></ProtectedRoute>
-      } />
       <Route path="/history" element={
         <ProtectedRoute><History /></ProtectedRoute>
       } />
       <Route path="/feedback" element={
         <ProtectedRoute><FeedbackScreen /></ProtectedRoute>
+      } />
+      <Route path="/admin-stats" element={
+        <ProtectedRoute><AdminStats /></ProtectedRoute>
       } />
     </Routes>
   )
