@@ -186,7 +186,16 @@ export default function AdminStats() {
         {stats.recentGames.map(game => {
           const s = statusLabel[game.status] || statusLabel.active
           return (
-            <div key={game.id} className="card" style={{ marginBottom: 8 }}>
+            <div
+              key={game.id}
+              className="card"
+              style={{ marginBottom: 8, cursor: 'pointer' }}
+              onClick={() => navigate(
+                game.status === 'active'
+                  ? `/view/${game.viewer_token}`
+                  : `/game/${game.id}/settlements`
+              )}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{game.title}</div>
@@ -194,7 +203,10 @@ export default function AdminStats() {
                     {format(new Date(game.created_at), 'dd/MM/yy HH:mm', { locale: he })}
                   </div>
                 </div>
-                <span className={`badge ${s.cls}`}>{s.label}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className={`badge ${s.cls}`}>{s.label}</span>
+                  <ChevronRight size={14} color="var(--text3)" />
+                </div>
               </div>
             </div>
           )
