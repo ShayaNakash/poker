@@ -88,6 +88,28 @@ export default function AdminDashboard() {
     setShowEndGame(true)
   }
 
+  // Undo last buyin
+  const [undoState, setUndoState] = useState(null) // { buyin, playerName, timer }
+
+  function clearUndo() {
+    setUndoState(prev => {
+      if (prev?.timer) clearTimeout(prev.timer)
+      return null
+    })
+  }
+
+  async function undoLastBuyin() {
+    if (!undoState) return
+    clearTimeout(undoState.timer)
+    const { buyin } = undoState
+    setUndoState(null)
+    await supabase.from('buyins')
+      .update({ deleted_at: new Date().toISOString(), delete_reason: 'ביטול מהיר' })
+      .eq('id', buyin.id)
+    setBuyins(prev => prev.map(b => b.id === buyin.id ? { ...b, deleted_at: new Date().toISOString() } : b))
+    showToast('Buy-in בוטל ✓', 'info')
+  }
+
   const rate = game?.chips_per_20 || 20
   const ilsToChips = (ils) => Math.round(ils / 20 * rate)
   const activeBuyins = (gpId) => buyins.filter(b => b.game_player_id === gpId && !b.deleted_at)
@@ -116,7 +138,11 @@ export default function AdminDashboard() {
     })
     setBuyins(prev => [...prev, buyin])
     setBuyinModal(null); setCustomAmount('')
-    showToast(`✓ +₪${amount} ל${gp?.player_name}`, 'success')
+
+    // Set undo state with 8 second timer
+    clearUndo()
+    const timer = setTimeout(() => setUndoState(null), 8000)
+    setUndoState({ buyin, playerName: gp?.player_name, amount, timer })
   }
 
   async function confirmEdit() {
@@ -422,6 +448,39 @@ export default function AdminDashboard() {
               <span style={{ color: 'var(--text3)' }}>סה"כ הוצאות</span>
               <strong style={{ color: 'var(--gold)' }}>₪{totalExpenses()}</strong>
             </div>
+          </div>
+        )}
+
+        {/* Undo bar */}
+        {undoState && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            background: 'rgba(212,168,83,0.12)',
+            border: '1px solid rgba(212,168,83,0.4)',
+            borderRadius: 'var(--radius)',
+            padding: '10px 14px',
+            marginBottom: 12,
+            animation: 'fadeIn 0.2s ease',
+          }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>
+              ✓ +₪{undoState.amount} ל{undoState.playerName}
+            </span>
+            <button
+              onClick={undoLastBuyin}
+              style={{
+                background: 'rgba(212,168,83,0.2)',
+                border: '1px solid var(--gold)',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--gold)',
+                fontFamily: 'Heebo',
+                fontWeight: 700,
+                fontSize: '0.82rem',
+                padding: '5px 14px',
+                cursor: 'pointer',
+              }}
+            >
+              ↩ בטל
+            </button>
           </div>
         )}
 
