@@ -4,9 +4,9 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/authContext'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
-import { ChevronRight, Users, Gamepad2, TrendingUp, Wifi, RefreshCw } from 'lucide-react'
+import { ChevronRight, Users, Gamepad2, TrendingUp, Wifi, RefreshCw, Circle } from 'lucide-react'
 
-const ADMIN_EMAIL = 'shayanakash1@gmail.com'
+const ADMIN_EMAILS = ['shayanakash1@gmail.com', 'idanakash@gmail.com']
 const ONLINE_THRESHOLD_MINUTES = 5
 
 export default function AdminStats() {
@@ -25,6 +25,8 @@ export default function AdminStats() {
     onlineUsers: 0,
     recentUsers: [],
     recentGames: [],
+    allProfiles: [],
+    onlineUserIds: [],
   })
 
   // Update presence
@@ -61,6 +63,8 @@ export default function AdminStats() {
         { count: onlineUsers },
         { data: recentGames },
         { data: recentUsers },
+        { data: allProfiles },
+        { data: onlinePresence },
       ] = await Promise.all([
         supabase.from('games').select('*', { count: 'exact', head: true }),
         supabase.from('games').select('*', { count: 'exact', head: true }).gte('created_at', weekAgo),
@@ -72,7 +76,11 @@ export default function AdminStats() {
         supabase.from('user_presence').select('*', { count: 'exact', head: true }).gte('last_seen', onlineThreshold),
         supabase.from('games').select('*').order('created_at', { ascending: false }).limit(8),
         supabase.from('players').select('*').order('created_at', { ascending: false }).limit(8),
+        supabase.from('profiles').select('*').order('created_at', { ascending: false }),
+        supabase.from('user_presence').select('user_id').gte('last_seen', onlineThreshold),
       ])
+
+      const onlineUserIds = (onlinePresence || []).map(p => p.user_id)
 
       setStats({
         totalUsers: totalUsers || 0,
@@ -85,6 +93,8 @@ export default function AdminStats() {
         onlineUsers: onlineUsers || 0,
         recentGames: recentGames || [],
         recentUsers: recentUsers || [],
+        allProfiles: allProfiles || [],
+        onlineUserIds,
       })
     } catch (err) {
       console.error(err)
@@ -101,7 +111,7 @@ export default function AdminStats() {
   }, [loadStats])
 
   // Block non-admin
-  if (user?.email !== ADMIN_EMAIL) {
+  if (!ADMIN_EMAILS.includes(user?.email)) {
     return (
       <div className="loading-screen">
         <div style={{ textAlign: 'center', color: 'var(--text2)' }}>
@@ -206,6 +216,34 @@ export default function AdminStats() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span className={`badge ${s.cls}`}>{s.label}</span>
                   <ChevronRight size={14} color="var(--text3)" />
+                </div>
+              </div>
+            </div>
+          )
+        })}
+
+        {/* Users list */}
+        <div className="section-title">משתמשים רשומים ({stats.allProfiles.length})</div>
+        {stats.allProfiles.map(profile => {
+          const isOnline = stats.onlineUserIds.includes(profile.id)
+          return (
+            <div key={profile.id} className="card" style={{ marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{profile.email}</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>
+                    נרשם: {format(new Date(profile.created_at), 'dd/MM/yy', { locale: he })}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Circle
+                    size={10}
+                    fill={isOnline ? 'var(--green)' : 'var(--border)'}
+                    color={isOnline ? 'var(--green)' : 'var(--border)'}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: isOnline ? 'var(--green)' : 'var(--text3)' }}>
+                    {isOnline ? 'Online' : 'Offline'}
+                  </span>
                 </div>
               </div>
             </div>
