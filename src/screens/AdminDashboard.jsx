@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
@@ -10,7 +10,7 @@ import {
   Edit2, Trash2, Lock, Eye, UserPlus, ShoppingCart, Trophy, AlertTriangle
 } from 'lucide-react'
 
-const QUICK_AMOUNTS = [20, 40, 60, 100, 200]
+const QUICK_AMOUNTS = [20, 40, 50, 60, 100, 200]
 
 export default function AdminDashboard() {
   const { gameId } = useParams()
@@ -26,6 +26,11 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [showEndGame, setShowEndGame] = useState(false)
   const [expandedPlayer, setExpandedPlayer] = useState(null)
+
+  // Flash animation state: { [gpId]: true }
+  const [flashingPlayers, setFlashingPlayers] = useState({})
+  // Floating amount pop: { [gpId]: amount }
+  const [poppingAmounts, setPoppingAmounts] = useState({})
 
   // Modals
   const [buyinModal, setBuyinModal] = useState(null)
@@ -62,7 +67,7 @@ export default function AdminDashboard() {
     setLoading(false)
   }, [gameId])
 
-  const channelRef = React.useRef(null)
+  const channelRef = useRef(null)
 
   useEffect(() => {
     loadData()
@@ -88,8 +93,20 @@ export default function AdminDashboard() {
     setShowEndGame(true)
   }
 
+  // Flash animation trigger
+  function triggerFlash(gpId, amount) {
+    setFlashingPlayers(prev => ({ ...prev, [gpId]: true }))
+    setPoppingAmounts(prev => ({ ...prev, [gpId]: amount }))
+    setTimeout(() => {
+      setFlashingPlayers(prev => { const n = { ...prev }; delete n[gpId]; return n })
+    }, 800)
+    setTimeout(() => {
+      setPoppingAmounts(prev => { const n = { ...prev }; delete n[gpId]; return n })
+    }, 900)
+  }
+
   // Undo last buyin
-  const [undoState, setUndoState] = useState(null) // { buyin, playerName, timer }
+  const [undoState, setUndoState] = useState(null)
 
   function clearUndo() {
     setUndoState(prev => {
@@ -118,7 +135,6 @@ export default function AdminDashboard() {
   const totalPot = () => buyins.filter(b => !b.deleted_at).reduce((s, b) => s + b.amount_ils, 0)
   const totalExpenses = () => expenses.reduce((s, e) => s + e.amount, 0)
 
-  // Players not yet in this game
   const availableToAdd = allPlayers.filter(p =>
     !gamePlayers.find(gp => gp.player_id === p.id)
   )
@@ -139,7 +155,10 @@ export default function AdminDashboard() {
     setBuyins(prev => [...prev, buyin])
     setBuyinModal(null); setCustomAmount('')
 
-    // Set undo state with 8 second timer
+    // Flash animation
+    triggerFlash(gpId, amount)
+
+    // Undo state
     clearUndo()
     const timer = setTimeout(() => setUndoState(null), 8000)
     setUndoState({ buyin, playerName: gp?.player_name, amount, timer })
@@ -195,7 +214,6 @@ export default function AdminDashboard() {
     loadData()
   }
 
-  // Add player mid-game
   async function addPlayerMidGame() {
     let playerName = ''
     let playerId = null
@@ -204,7 +222,6 @@ export default function AdminDashboard() {
       playerName = selectedExistingPlayer.name
       playerId = selectedExistingPlayer.id
     } else if (newPlayerName.trim()) {
-      // Create new player
       const { data: newP, error } = await supabase
         .from('players')
         .insert({ name: newPlayerName.trim(), user_id: user.id })
@@ -218,7 +235,6 @@ export default function AdminDashboard() {
       return
     }
 
-    // Add to game
     const { data: gp, error: gpError } = await supabase
       .from('game_players')
       .insert({ game_id: gameId, player_id: playerId, player_name: playerName })
@@ -233,7 +249,6 @@ export default function AdminDashboard() {
     showToast(`${playerName} נוסף למשחק ✓`, 'success')
   }
 
-  // Add or edit expense
   async function addExpense() {
     const amount = parseInt(expenseAmount)
     if (!expensePaidBy) { showToast('בחר מי שילם', 'error'); return }
@@ -241,7 +256,6 @@ export default function AdminDashboard() {
     if (expenseSplitAmong.length === 0) { showToast('בחר מי חולק בהוצאה', 'error'); return }
 
     if (editingExpense) {
-      // Edit existing
       const { error } = await supabase.from('expenses').update({
         paid_by_name: expensePaidBy,
         description: expenseDesc || 'קניות',
@@ -251,7 +265,6 @@ export default function AdminDashboard() {
       if (error) { showToast('שגיאה בעדכון', 'error'); return }
       showToast('הוצאה עודכנה ✓', 'success')
     } else {
-      // New expense
       const { error } = await supabase.from('expenses').insert({
         game_id: gameId,
         paid_by_name: expensePaidBy,
@@ -280,7 +293,6 @@ export default function AdminDashboard() {
     showToast('הוצאה נמחקה ✓', 'success')
   }
 
-  // Early exit
   const [earlyExitModal, setEarlyExitModal] = useState(null)
   const [earlyExitChips, setEarlyExitChips] = useState('')
 
@@ -311,7 +323,6 @@ export default function AdminDashboard() {
   if (loading) return <div className="loading-screen"><div className="spinner" /><span>טוען...</span></div>
   if (!game) return <div className="loading-screen"><span>משחק לא נמצא</span></div>
 
-  // ── Inline EndGame ──
   if (showEndGame) {
     return <InlineEndGame
       game={game}
@@ -367,7 +378,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="content">
-        {/* Live indicator + action buttons */}
+        {/* Live indicator */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
           <span className="pulse" style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)', display: 'inline-block', flexShrink: 0 }} />
           <span style={{ color: 'var(--green)', fontSize: '0.82rem', fontWeight: 600 }}>פעיל</span>
@@ -375,25 +386,14 @@ export default function AdminDashboard() {
             <button
               className="btn btn-ghost btn-sm"
               style={{ fontSize: '0.78rem', color: 'var(--gold)', border: '1px solid rgba(212,168,83,0.3)' }}
-              onClick={() => {
-                setExpenseSplitAmong(gamePlayers.map(p => p.player_name))
-                setExpenseModal(true)
-              }}
+              onClick={() => { setExpenseSplitAmong(gamePlayers.map(p => p.player_name)); setExpenseModal(true) }}
             >
               <ShoppingCart size={13} /> הוצאה
             </button>
-            <button
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: '0.78rem' }}
-              onClick={() => setAddPlayerModal(true)}
-            >
+            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.78rem' }} onClick={() => setAddPlayerModal(true)}>
               <UserPlus size={13} /> שחקן
             </button>
-            <button
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: '0.75rem', color: 'var(--text3)', padding: '4px 8px' }}
-              onClick={lockGame}
-            >
+            <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.75rem', color: 'var(--text3)', padding: '4px 8px' }} onClick={lockGame}>
               <Lock size={12} />
             </button>
           </div>
@@ -402,15 +402,10 @@ export default function AdminDashboard() {
         {/* Expenses summary */}
         {expenses.length > 0 && (
           <div style={{
-            background: 'rgba(212,168,83,0.06)',
-            border: '1px solid rgba(212,168,83,0.2)',
-            borderRadius: 'var(--radius)',
-            padding: '10px 14px',
-            marginBottom: 14,
+            background: 'rgba(212,168,83,0.06)', border: '1px solid rgba(212,168,83,0.2)',
+            borderRadius: 'var(--radius)', padding: '10px 14px', marginBottom: 14,
           }}>
-            <div style={{ fontSize: '0.8rem', color: 'var(--gold)', fontWeight: 700, marginBottom: 6 }}>
-              🛒 הוצאות משותפות
-            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--gold)', fontWeight: 700, marginBottom: 6 }}>🛒 הוצאות משותפות</div>
             {expenses.map((e, i) => (
               <div key={e.id || i} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -420,25 +415,11 @@ export default function AdminDashboard() {
                 <span>{e.paid_by_name} · {e.description || 'קניות'} ({e.split_among?.length || 0} משתתפים)</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <strong style={{ color: 'var(--gold)' }}>₪{e.amount}</strong>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    style={{ padding: '3px 6px' }}
-                    onClick={() => {
-                      setExpensePaidBy(e.paid_by_name)
-                      setExpenseDesc(e.description || '')
-                      setExpenseAmount(String(e.amount))
-                      setExpenseSplitAmong(e.split_among || [])
-                      setEditingExpense(e)
-                      setExpenseModal(true)
-                    }}
-                  >
+                  <button className="btn btn-ghost btn-sm" style={{ padding: '3px 6px' }}
+                    onClick={() => { setExpensePaidBy(e.paid_by_name); setExpenseDesc(e.description || ''); setExpenseAmount(String(e.amount)); setExpenseSplitAmong(e.split_among || []); setEditingExpense(e); setExpenseModal(true) }}>
                     <Edit2 size={13} />
                   </button>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    style={{ padding: '3px 6px', color: 'var(--red)' }}
-                    onClick={() => deleteExpense(e)}
-                  >
+                  <button className="btn btn-ghost btn-sm" style={{ padding: '3px 6px', color: 'var(--red)' }} onClick={() => deleteExpense(e)}>
                     <Trash2 size={13} />
                   </button>
                 </div>
@@ -455,30 +436,18 @@ export default function AdminDashboard() {
         {undoState && (
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            background: 'rgba(212,168,83,0.12)',
-            border: '1px solid rgba(212,168,83,0.4)',
-            borderRadius: 'var(--radius)',
-            padding: '10px 14px',
-            marginBottom: 12,
-            animation: 'fadeIn 0.2s ease',
+            background: 'rgba(212,168,83,0.12)', border: '1px solid rgba(212,168,83,0.4)',
+            borderRadius: 'var(--radius)', padding: '10px 14px', marginBottom: 12,
           }}>
             <span style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>
               ✓ +₪{undoState.amount} ל{undoState.playerName}
             </span>
-            <button
-              onClick={undoLastBuyin}
-              style={{
-                background: 'rgba(212,168,83,0.2)',
-                border: '1px solid var(--gold)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--gold)',
-                fontFamily: 'Heebo',
-                fontWeight: 700,
-                fontSize: '0.82rem',
-                padding: '5px 14px',
-                cursor: 'pointer',
-              }}
-            >
+            <button onClick={undoLastBuyin} style={{
+              background: 'rgba(212,168,83,0.2)', border: '1px solid var(--gold)',
+              borderRadius: 'var(--radius-sm)', color: 'var(--gold)',
+              fontFamily: 'Heebo', fontWeight: 700, fontSize: '0.82rem',
+              padding: '5px 14px', cursor: 'pointer',
+            }}>
               ↩ בטל
             </button>
           </div>
@@ -494,8 +463,9 @@ export default function AdminDashboard() {
           const last = pBuyins[pBuyins.length - 1]
           const isExpanded = expandedPlayer === gp.id
           const hasExited = !!gp.exited_at
+          const isFlashing = !!flashingPlayers[gp.id]
+          const popAmount = poppingAmounts[gp.id]
 
-          // If player exited early
           if (hasExited) {
             const endingIls = Math.round((gp.ending_chips || 0) / rate * 20)
             const pl = endingIls - total
@@ -521,7 +491,16 @@ export default function AdminDashboard() {
           }
 
           return (
-            <div key={gp.id} className={`player-card ${count > 0 ? 'active-player' : ''}`}>
+            <div
+              key={gp.id}
+              className={`player-card ${count > 0 ? 'active-player' : ''} ${isFlashing ? 'buyin-flash' : ''}`}
+              style={{ position: 'relative', overflow: 'visible' }}
+            >
+              {/* Floating amount pop */}
+              {popAmount && (
+                <div className="amount-pop">+₪{popAmount}</div>
+              )}
+
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="player-name-big">{gp.player_name}</div>
@@ -536,11 +515,7 @@ export default function AdminDashboard() {
                     )}
                   </div>
                 </div>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => setExpandedPlayer(isExpanded ? null : gp.id)}
-                  style={{ padding: '8px 10px', flexShrink: 0 }}
-                >
+                <button className="btn btn-ghost btn-sm" onClick={() => setExpandedPlayer(isExpanded ? null : gp.id)} style={{ padding: '8px 10px', flexShrink: 0 }}>
                   <ChevronDown size={16} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
                 </button>
               </div>
@@ -553,53 +528,34 @@ export default function AdminDashboard() {
                   </button>
                 ))}
               </div>
-              <button
-                className="btn btn-ghost btn-sm"
-                style={{ width: '100%', marginTop: 6, fontSize: '0.82rem' }}
-                onClick={() => { setBuyinModal(gp.id); setCustomAmount('') }}
-              >
+              <button className="btn btn-ghost btn-sm" style={{ width: '100%', marginTop: 6, fontSize: '0.82rem' }}
+                onClick={() => { setBuyinModal(gp.id); setCustomAmount('') }}>
                 <Plus size={13} /> סכום מותאם
               </button>
-              <button
-                className="btn btn-ghost btn-sm"
-                style={{ width: '100%', marginTop: 4, fontSize: '0.78rem', color: 'var(--orange)' }}
-                onClick={() => { setEarlyExitModal(gp); setEarlyExitChips('') }}
-              >
+              <button className="btn btn-ghost btn-sm" style={{ width: '100%', marginTop: 4, fontSize: '0.78rem', color: 'var(--orange)' }}
+                onClick={() => { setEarlyExitModal(gp); setEarlyExitChips('') }}>
                 🚪 יציאה מוקדמת
               </button>
 
               {isExpanded && (
                 <div style={{ marginTop: 12 }}>
                   <div className="divider" />
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text2)', fontWeight: 600, marginBottom: 8 }}>
-                    היסטוריה ({count} buy-ins)
-                  </div>
-                  {pBuyins.length === 0 && (
-                    <div style={{ color: 'var(--text3)', fontSize: '0.85rem', padding: '4px 0' }}>אין buy-ins</div>
-                  )}
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text2)', fontWeight: 600, marginBottom: 8 }}>היסטוריה ({count} buy-ins)</div>
+                  {pBuyins.length === 0 && <div style={{ color: 'var(--text3)', fontSize: '0.85rem', padding: '4px 0' }}>אין buy-ins</div>}
                   {pBuyins.map(b => (
-                    <div key={b.id} style={{
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      padding: '8px 0', borderBottom: '1px solid var(--border)',
-                    }}>
+                    <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
                       <div>
                         <div style={{ fontWeight: 700, color: 'var(--gold)' }}>
                           ₪{b.amount_ils}
                           {rate !== 20 && <span style={{ color: 'var(--text3)', fontWeight: 400, fontSize: '0.82rem', marginRight: 4 }}>({b.chips} צ'יפים)</span>}
                         </div>
-                        <div style={{ fontSize: '0.73rem', color: 'var(--text3)' }}>
-                          {format(new Date(b.recorded_at), 'HH:mm, dd/MM/yy')}
-                        </div>
+                        <div style={{ fontSize: '0.73rem', color: 'var(--text3)' }}>{format(new Date(b.recorded_at), 'HH:mm, dd/MM/yy')}</div>
                       </div>
                       <div style={{ display: 'flex', gap: 4 }}>
                         <button className="btn btn-ghost btn-sm" style={{ padding: '6px 8px' }}
-                          onClick={() => { setEditModal(b); setEditAmount(String(b.amount_ils)) }}>
-                          <Edit2 size={14} />
-                        </button>
+                          onClick={() => { setEditModal(b); setEditAmount(String(b.amount_ils)) }}><Edit2 size={14} /></button>
                         <button className="btn btn-ghost btn-sm" style={{ padding: '6px 8px', color: 'var(--red)' }}
-                          onClick={() => { setDeleteConfirm(b); setDeleteReason('') }}>
-                          <Trash2 size={14} />
-                        </button>
+                          onClick={() => { setDeleteConfirm(b); setDeleteReason('') }}><Trash2 size={14} /></button>
                       </div>
                     </div>
                   ))}
@@ -627,13 +583,12 @@ export default function AdminDashboard() {
           <span style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--gold)' }}>₪{totalPot()}</span>
         </div>
 
-        <button className="btn btn-primary btn-lg" style={{ width: '100%' }}
-          onClick={goToEndGame}>
+        <button className="btn btn-primary btn-lg" style={{ width: '100%' }} onClick={goToEndGame}>
           <Flag size={18} /> סיים משחק
         </button>
       </div>
 
-      {/* Custom buy-in modal */}
+      {/* Modals */}
       {buyinModal && (
         <div className="modal-overlay" onClick={() => setBuyinModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -641,8 +596,8 @@ export default function AdminDashboard() {
             {rate !== 20 && <div style={{ color: 'var(--text3)', fontSize: '0.82rem', marginBottom: 12 }}>יחס: ₪20 = {rate} צ'יפים</div>}
             <div className="form-group">
               <label className="form-label">סכום (₪)</label>
-              <input type="number" inputMode="numeric" placeholder="0"
-                value={customAmount} onChange={e => setCustomAmount(e.target.value)} autoFocus
+              <input type="number" inputMode="numeric" placeholder="0" value={customAmount}
+                onChange={e => setCustomAmount(e.target.value)} autoFocus
                 onKeyDown={e => e.key === 'Enter' && addBuyin(buyinModal, parseInt(customAmount))} />
               {customAmount && parseInt(customAmount) > 0 && rate !== 20 && (
                 <div style={{ marginTop: 6, fontSize: '0.82rem', color: 'var(--gold)' }}>= {ilsToChips(parseInt(customAmount))} צ'יפים</div>
@@ -656,8 +611,7 @@ export default function AdminDashboard() {
               ))}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn btn-primary" style={{ flex: 1 }}
-                onClick={() => addBuyin(buyinModal, parseInt(customAmount))}
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => addBuyin(buyinModal, parseInt(customAmount))}
                 disabled={!customAmount || parseInt(customAmount) <= 0}>הוסף</button>
               <button className="btn btn-ghost" onClick={() => setBuyinModal(null)}>ביטול</button>
             </div>
@@ -665,7 +619,6 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Edit modal */}
       {editModal && (
         <div className="modal-overlay" onClick={() => setEditModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -675,9 +628,7 @@ export default function AdminDashboard() {
             </div>
             <div className="form-group">
               <label className="form-label">סכום חדש (₪)</label>
-              <input type="number" inputMode="numeric" value={editAmount}
-                onChange={e => setEditAmount(e.target.value)} autoFocus
-                onKeyDown={e => e.key === 'Enter' && confirmEdit()} />
+              <input type="number" inputMode="numeric" value={editAmount} onChange={e => setEditAmount(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && confirmEdit()} />
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={confirmEdit}>שמור</button>
@@ -687,7 +638,6 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Delete confirm */}
       {deleteConfirm && (
         <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -697,8 +647,7 @@ export default function AdminDashboard() {
             </div>
             <div className="form-group">
               <label className="form-label">סיבה</label>
-              <input value={deleteReason} onChange={e => setDeleteReason(e.target.value)}
-                placeholder="הוזן בטעות" autoFocus onKeyDown={e => e.key === 'Enter' && confirmDelete()} />
+              <input value={deleteReason} onChange={e => setDeleteReason(e.target.value)} placeholder="הוזן בטעות" autoFocus onKeyDown={e => e.key === 'Enter' && confirmDelete()} />
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn btn-danger" style={{ flex: 1 }} onClick={confirmDelete}>מחק</button>
@@ -708,123 +657,83 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Add player mid-game modal */}
       {addPlayerModal && (
         <div className="modal-overlay" onClick={() => setAddPlayerModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-title"><UserPlus size={18} /> הוסף שחקן למשחק</div>
-
             {availableToAdd.length > 0 && (
               <>
                 <div className="form-label" style={{ marginBottom: 8 }}>בחר מהרשימה:</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
                   {availableToAdd.map(p => (
-                    <button key={p.id}
-                      onClick={() => setSelectedExistingPlayer(selectedExistingPlayer?.id === p.id ? null : p)}
-                      style={{
-                        padding: '8px 14px', borderRadius: 'var(--radius-sm)',
-                        border: `2px solid ${selectedExistingPlayer?.id === p.id ? 'var(--gold)' : 'var(--border)'}`,
-                        background: selectedExistingPlayer?.id === p.id ? 'rgba(212,168,83,0.15)' : 'var(--bg3)',
-                        color: selectedExistingPlayer?.id === p.id ? 'var(--gold)' : 'var(--text)',
-                        fontFamily: 'Heebo', cursor: 'pointer', fontSize: '0.9rem',
-                      }}
-                    >
-                      {p.name}
-                    </button>
+                    <button key={p.id} onClick={() => setSelectedExistingPlayer(selectedExistingPlayer?.id === p.id ? null : p)} style={{
+                      padding: '8px 14px', borderRadius: 'var(--radius-sm)',
+                      border: `2px solid ${selectedExistingPlayer?.id === p.id ? 'var(--gold)' : 'var(--border)'}`,
+                      background: selectedExistingPlayer?.id === p.id ? 'rgba(212,168,83,0.15)' : 'var(--bg3)',
+                      color: selectedExistingPlayer?.id === p.id ? 'var(--gold)' : 'var(--text)',
+                      fontFamily: 'Heebo', cursor: 'pointer', fontSize: '0.9rem',
+                    }}>{p.name}</button>
                   ))}
                 </div>
                 <div style={{ color: 'var(--text3)', fontSize: '0.82rem', textAlign: 'center', marginBottom: 12 }}>— או —</div>
               </>
             )}
-
             <div className="form-group">
               <label className="form-label">שם שחקן חדש</label>
-              <input
-                value={newPlayerName}
-                onChange={e => { setNewPlayerName(e.target.value); setSelectedExistingPlayer(null) }}
-                placeholder="הכנס שם..."
-                autoFocus={availableToAdd.length === 0}
-              />
+              <input value={newPlayerName} onChange={e => { setNewPlayerName(e.target.value); setSelectedExistingPlayer(null) }}
+                placeholder="הכנס שם..." autoFocus={availableToAdd.length === 0} />
             </div>
-
             <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={addPlayerMidGame}>
-                הוסף למשחק
-              </button>
-              <button className="btn btn-ghost" onClick={() => { setAddPlayerModal(false); setNewPlayerName(''); setSelectedExistingPlayer(null) }}>
-                ביטול
-              </button>
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={addPlayerMidGame}>הוסף למשחק</button>
+              <button className="btn btn-ghost" onClick={() => { setAddPlayerModal(false); setNewPlayerName(''); setSelectedExistingPlayer(null) }}>ביטול</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Expense modal */}
       {expenseModal && (
         <div className="modal-overlay" onClick={() => { setExpenseModal(false); setEditingExpense(null) }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-title">
-              <ShoppingCart size={18} /> {editingExpense ? 'עריכת הוצאה' : 'הוצאה משותפת'}
-            </div>
-
+            <div className="modal-title"><ShoppingCart size={18} /> {editingExpense ? 'עריכת הוצאה' : 'הוצאה משותפת'}</div>
             <div className="form-group">
               <label className="form-label">מי שילם?</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {gamePlayers.map(p => (
-                  <button key={p.id}
-                    onClick={() => setExpensePaidBy(p.player_name)}
-                    style={{
-                      padding: '8px 14px', borderRadius: 'var(--radius-sm)',
-                      border: `2px solid ${expensePaidBy === p.player_name ? 'var(--gold)' : 'var(--border)'}`,
-                      background: expensePaidBy === p.player_name ? 'rgba(212,168,83,0.15)' : 'var(--bg3)',
-                      color: expensePaidBy === p.player_name ? 'var(--gold)' : 'var(--text)',
-                      fontFamily: 'Heebo', cursor: 'pointer', fontSize: '0.9rem',
-                    }}
-                  >
-                    {p.player_name}
-                  </button>
+                  <button key={p.id} onClick={() => setExpensePaidBy(p.player_name)} style={{
+                    padding: '8px 14px', borderRadius: 'var(--radius-sm)',
+                    border: `2px solid ${expensePaidBy === p.player_name ? 'var(--gold)' : 'var(--border)'}`,
+                    background: expensePaidBy === p.player_name ? 'rgba(212,168,83,0.15)' : 'var(--bg3)',
+                    color: expensePaidBy === p.player_name ? 'var(--gold)' : 'var(--text)',
+                    fontFamily: 'Heebo', cursor: 'pointer', fontSize: '0.9rem',
+                  }}>{p.player_name}</button>
                 ))}
               </div>
             </div>
-
             <div className="form-group">
               <label className="form-label">סכום (₪)</label>
-              <input type="number" inputMode="numeric" placeholder="0"
-                value={expenseAmount} onChange={e => setExpenseAmount(e.target.value)} />
+              <input type="number" inputMode="numeric" placeholder="0" value={expenseAmount} onChange={e => setExpenseAmount(e.target.value)} />
             </div>
-
             <div className="form-group">
               <label className="form-label">תיאור (אופציונלי)</label>
               <input value={expenseDesc} onChange={e => setExpenseDesc(e.target.value)} placeholder="נשנושים, שתייה..." />
             </div>
-
             <div className="form-group">
               <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span>מי חולק? ({expenseSplitAmong.length}/{gamePlayers.length})</span>
-                <button
-                  onClick={() => setExpenseSplitAmong(
-                    expenseSplitAmong.length === gamePlayers.length
-                      ? [] : gamePlayers.map(p => p.player_name)
-                  )}
-                  style={{ background: 'none', border: 'none', color: 'var(--gold)', fontFamily: 'Heebo', fontSize: '0.82rem', cursor: 'pointer' }}
-                >
+                <button onClick={() => setExpenseSplitAmong(expenseSplitAmong.length === gamePlayers.length ? [] : gamePlayers.map(p => p.player_name))}
+                  style={{ background: 'none', border: 'none', color: 'var(--gold)', fontFamily: 'Heebo', fontSize: '0.82rem', cursor: 'pointer' }}>
                   {expenseSplitAmong.length === gamePlayers.length ? 'בטל הכל' : 'בחר הכל'}
                 </button>
               </label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {gamePlayers.map(p => (
-                  <button key={p.id}
-                    onClick={() => toggleSplitPlayer(p.player_name)}
-                    style={{
-                      padding: '8px 14px', borderRadius: 'var(--radius-sm)',
-                      border: `2px solid ${expenseSplitAmong.includes(p.player_name) ? 'var(--green)' : 'var(--border)'}`,
-                      background: expenseSplitAmong.includes(p.player_name) ? 'rgba(46,204,113,0.12)' : 'var(--bg3)',
-                      color: expenseSplitAmong.includes(p.player_name) ? 'var(--green)' : 'var(--text)',
-                      fontFamily: 'Heebo', cursor: 'pointer', fontSize: '0.9rem',
-                    }}
-                  >
-                    {expenseSplitAmong.includes(p.player_name) ? '✓ ' : ''}{p.player_name}
-                  </button>
+                  <button key={p.id} onClick={() => toggleSplitPlayer(p.player_name)} style={{
+                    padding: '8px 14px', borderRadius: 'var(--radius-sm)',
+                    border: `2px solid ${expenseSplitAmong.includes(p.player_name) ? 'var(--green)' : 'var(--border)'}`,
+                    background: expenseSplitAmong.includes(p.player_name) ? 'rgba(46,204,113,0.12)' : 'var(--bg3)',
+                    color: expenseSplitAmong.includes(p.player_name) ? 'var(--green)' : 'var(--text)',
+                    fontFamily: 'Heebo', cursor: 'pointer', fontSize: '0.9rem',
+                  }}>{expenseSplitAmong.includes(p.player_name) ? '✓ ' : ''}{p.player_name}</button>
                 ))}
               </div>
               {expenseSplitAmong.length > 0 && expenseAmount && (
@@ -833,17 +742,14 @@ export default function AdminDashboard() {
                 </div>
               )}
             </div>
-
             <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={addExpense}>
-                שמור הוצאה
-              </button>
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={addExpense}>שמור הוצאה</button>
               <button className="btn btn-ghost" onClick={() => { setExpenseModal(false); setEditingExpense(null) }}>ביטול</button>
             </div>
           </div>
         </div>
       )}
-      {/* Early exit modal */}
+
       {earlyExitModal && (
         <div className="modal-overlay" onClick={() => setEarlyExitModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -853,32 +759,24 @@ export default function AdminDashboard() {
             </div>
             <div className="form-group">
               <label className="form-label">כמה צ'יפים הוא מחזיר לקופה?</label>
-              <input
-                type="number" inputMode="numeric" placeholder="0"
-                value={earlyExitChips}
-                onChange={e => setEarlyExitChips(e.target.value)}
-                autoFocus
-                onKeyDown={e => e.key === 'Enter' && confirmEarlyExit()}
-              />
-              {earlyExitChips !== '' && (
-                <div style={{ marginTop: 8, fontSize: '0.85rem' }}>
-                  {(() => {
-                    const chips = parseInt(earlyExitChips) || 0
-                    const endingIls = Math.round(chips / rate * 20)
-                    const pl = endingIls - playerTotal(earlyExitModal.id)
-                    return (
-                      <span className={pl > 0 ? 'amount-pos' : pl < 0 ? 'amount-neg' : 'amount-zero'}>
-                        תוצאה: {pl > 0 ? '+' : ''}₪{pl}
-                      </span>
-                    )
-                  })()}
-                </div>
-              )}
+              <input type="number" inputMode="numeric" placeholder="0" value={earlyExitChips}
+                onChange={e => setEarlyExitChips(e.target.value)} autoFocus
+                onKeyDown={e => e.key === 'Enter' && confirmEarlyExit()} />
+              {earlyExitChips !== '' && (() => {
+                const chips = parseInt(earlyExitChips) || 0
+                const endingIls = Math.round(chips / rate * 20)
+                const pl = endingIls - playerTotal(earlyExitModal.id)
+                return (
+                  <div style={{ marginTop: 8, fontSize: '0.85rem' }}>
+                    <span className={pl > 0 ? 'amount-pos' : pl < 0 ? 'amount-neg' : 'amount-zero'}>
+                      תוצאה: {pl > 0 ? '+' : ''}₪{pl}
+                    </span>
+                  </div>
+                )
+              })()}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={confirmEarlyExit}>
-                אשר יציאה
-              </button>
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={confirmEarlyExit}>אשר יציאה</button>
               <button className="btn btn-ghost" onClick={() => setEarlyExitModal(null)}>ביטול</button>
             </div>
           </div>
@@ -887,17 +785,16 @@ export default function AdminDashboard() {
     </div>
   )
 }
+
 function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, gameId }) {
   const showToast = useToast()
   const rate = game?.chips_per_20 || 20
   const [chips, setChips] = useState({})
   const [saving, setSaving] = useState(false)
 
-  // Pre-fill existing
   useEffect(() => {
     const initial = {}
     gamePlayers.forEach(p => {
-      // Only pre-fill for non-exited players
       if (!p.exited_at && p.ending_chips != null) {
         initial[p.id] = String(p.ending_chips)
       }
@@ -909,35 +806,26 @@ function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, ga
   const activeBuyins = (gpId) => buyins.filter(b => b.game_player_id === gpId && !b.deleted_at)
   const playerTotal = (gpId) => activeBuyins(gpId).reduce((s, b) => s + b.amount_ils, 0)
   const totalPot = () => buyins.filter(b => !b.deleted_at).reduce((s, b) => s + b.amount_ils, 0)
-
-  // Total chips = all bought chips (no subtraction)
   const totalChipsInGame = () => buyins.filter(b => !b.deleted_at).reduce((s, b) => s + b.chips, 0)
-
-  // Chips entered = manually entered + early exited players' chips
   const totalChipsEntered = () => {
     const manual = Object.values(chips).reduce((s, v) => s + (parseInt(v) || 0), 0)
     const exited = gamePlayers.filter(gp => gp.exited_at).reduce((s, gp) => s + (gp.ending_chips || 0), 0)
     return manual + exited
   }
-
   const chipsBalanced = () => totalChipsEntered() === totalChipsInGame()
   const profitLoss = (gpId) => chipsToIls(parseInt(chips[gpId]) || 0) - playerTotal(gpId)
 
   async function endGame() {
-    // Only check missing chips for players who haven't exited early
     const missing = gamePlayers.filter(gp => !gp.exited_at && chips[gp.id] === undefined && chips[gp.id] !== '0')
     if (missing.length > 0) { showToast(`חסרים צ'יפים עבור: ${missing.map(p => p.player_name).join(', ')}`, 'error'); return }
 
     setSaving(true)
     try {
-      // Only update chips for players who haven't exited early
       for (const gp of gamePlayers) {
         if (!gp.exited_at) {
           await supabase.from('game_players').update({ ending_chips: parseInt(chips[gp.id]) || 0 }).eq('id', gp.id)
         }
       }
-
-      // Use existing ending_chips for exited players, manual input for others
       const updatedPlayers = gamePlayers.map(gp => ({
         ...gp,
         ending_chips: gp.exited_at ? (gp.ending_chips || 0) : (parseInt(chips[gp.id]) || 0)
@@ -953,7 +841,6 @@ function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, ga
           required_amount: t.required_amount,
         })))
       }
-
       await supabase.from('games').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', gameId)
       showToast('המשחק הסתיים ✓', 'success')
       onDone()
@@ -1005,7 +892,6 @@ function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, ga
 
         <div className="section-title">צ'יפים לפי שחקן</div>
         {gamePlayers.map(gp => {
-          // Skip players who already exited early
           if (gp.exited_at) {
             const endingIls = Math.round((gp.ending_chips || 0) / rate * 20)
             const pl = endingIls - playerTotal(gp.id)
@@ -1059,12 +945,8 @@ function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, ga
           )
         })}
 
-        <button
-          className="btn btn-primary btn-lg"
-          style={{ width: '100%', marginTop: 20 }}
-          onClick={endGame}
-          disabled={saving || !balanced}
-        >
+        <button className="btn btn-primary btn-lg" style={{ width: '100%', marginTop: 20 }}
+          onClick={endGame} disabled={saving || !balanced}>
           {saving ? 'שומר...' : <><Trophy size={18} /> סיים וצור סילוקים</>}
         </button>
         {!balanced && chipsEntered > 0 && (
