@@ -113,7 +113,7 @@ export default function Settlements() {
         const sPayments = settlementPayments(s.id)
         const { remaining, status } = settlementStatus(s, sPayments)
         const statusEmoji = status === 'paid' ? '✅' : status === 'partial' ? '⏳' : '💸'
-        return `${statusEmoji} *${s.from_player_name}* → *${s.to_player_name}*: ₪${remaining > 0 ? remaining : s.required_amount}`
+        return `${statusEmoji} *${s.from_player_name}* ← *${s.to_player_name}*: ₪${remaining > 0 ? remaining : s.required_amount}`
       }),
       ``,
       `🔗 ${window.location.origin}/view/${game.viewer_token}`,
