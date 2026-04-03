@@ -5,7 +5,7 @@ import { settlementStatus } from '../utils/settlement'
 import { useToast } from '../lib/toast'
 import { useAuth } from '../lib/authContext'
 import { format } from 'date-fns'
-import { ChevronRight, Plus, CreditCard, Banknote, Smartphone, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { ChevronRight, Plus, CreditCard, Banknote, Smartphone, CheckCircle, Clock, AlertCircle, Share2, MessageCircle } from 'lucide-react'
 
 const METHOD_ICONS = {
   cash: <Banknote size={14} />,
@@ -94,6 +94,36 @@ export default function Settlements() {
     showToast(`תשלום ₪${amount} נרשם ✓`, 'success')
   }
 
+  // Share functions
+  async function shareViewerLink() {
+    if (!game) return
+    const url = `${window.location.origin}/view/${game.viewer_token}`
+    try { await navigator.share({ title: `סילוקים — ${game.title}`, url }) }
+    catch { await navigator.clipboard.writeText(url); showToast('קישור הועתק ✓', 'success') }
+  }
+
+  function shareWhatsApp() {
+    if (!game || settlements.length === 0) return
+
+    const lines = [
+      `🃏 *ZugKing — סילוקים*`,
+      `*${game.title}*`,
+      ``,
+      ...settlements.map(s => {
+        const sPayments = settlementPayments(s.id)
+        const { remaining, status } = settlementStatus(s, sPayments)
+        const statusEmoji = status === 'paid' ? '✅' : status === 'partial' ? '⏳' : '💸'
+        return `${statusEmoji} *${s.from_player_name}* → *${s.to_player_name}*: ₪${remaining > 0 ? remaining : s.required_amount}`
+      }),
+      ``,
+      `🔗 ${window.location.origin}/view/${game.viewer_token}`,
+    ]
+
+    const text = lines.join('\n')
+    const encoded = encodeURIComponent(text)
+    window.open(`https://wa.me/?text=${encoded}`, '_blank')
+  }
+
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>
 
   return (
@@ -104,7 +134,25 @@ export default function Settlements() {
           <div className="header-title">סילוקים</div>
           <div className="header-sub">{game?.title}</div>
         </div>
-        <div style={{ width: 60 }} />
+        {/* Share buttons */}
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={shareWhatsApp}
+            title="שלח לווטסאפ"
+            style={{ padding: '8px' }}
+          >
+            <MessageCircle size={16} />
+          </button>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={shareViewerLink}
+            title="שתף קישור"
+            style={{ padding: '8px' }}
+          >
+            <Share2 size={16} />
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -126,6 +174,37 @@ export default function Settlements() {
       </div>
 
       <div className="content" style={{ paddingBottom: 24 }}>
+
+        {/* Share bar */}
+        <div style={{
+          display: 'flex', gap: 10, marginBottom: 16,
+        }}>
+          <button
+            onClick={shareWhatsApp}
+            style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: '10px', borderRadius: 'var(--radius)',
+              background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.3)',
+              color: '#25d366', fontFamily: 'Heebo', fontWeight: 700, fontSize: '0.85rem',
+              cursor: 'pointer',
+            }}
+          >
+            <MessageCircle size={16} /> שלח לווטסאפ
+          </button>
+          <button
+            onClick={shareViewerLink}
+            style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: '10px', borderRadius: 'var(--radius)',
+              background: 'rgba(212,168,83,0.1)', border: '1px solid rgba(212,168,83,0.3)',
+              color: 'var(--gold)', fontFamily: 'Heebo', fontWeight: 700, fontSize: '0.85rem',
+              cursor: 'pointer',
+            }}
+          >
+            <Share2 size={16} /> שתף קישור
+          </button>
+        </div>
+
         {activeTab === 'settlements' && (
           <>
             <div className="section-title">העברות מומלצות</div>
@@ -224,7 +303,6 @@ export default function Settlements() {
                 const pokerPL = endingIls - totalBuyins
                 const medals = ['🥇', '🥈', '🥉']
 
-                // Calculate expense balance
                 let expenseBalance = 0
                 expenses.forEach(exp => {
                   const splitAmong = exp.split_among || []
@@ -253,13 +331,10 @@ export default function Settlements() {
                           </div>
                         </div>
                       </div>
-                      <div className={totalPL > 0 ? 'amount-pos' : totalPL < 0 ? 'amount-neg' : 'amount-zero'}
-                        style={{ fontSize: '1.3rem' }}>
+                      <div className={totalPL > 0 ? 'amount-pos' : totalPL < 0 ? 'amount-neg' : 'amount-zero'} style={{ fontSize: '1.3rem' }}>
                         {totalPL > 0 ? '+' : ''}₪{totalPL}
                       </div>
                     </div>
-
-                    {/* Breakdown */}
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                         <span style={{ color: 'var(--text3)' }}>🃏 רווח/הפסד פוקר</span>
@@ -293,8 +368,7 @@ export default function Settlements() {
             </div>
             <div className="form-group">
               <label className="form-label">סכום (₪)</label>
-              <input type="number" inputMode="numeric" value={payAmount}
-                onChange={e => setPayAmount(e.target.value)} autoFocus />
+              <input type="number" inputMode="numeric" value={payAmount} onChange={e => setPayAmount(e.target.value)} autoFocus />
             </div>
             <div className="form-group">
               <label className="form-label">אמצעי תשלום</label>
@@ -319,8 +393,7 @@ export default function Settlements() {
               <input value={payNote} onChange={e => setPayNote(e.target.value)} placeholder="הערה..." />
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={addPayment}
-                disabled={saving || !payAmount}>
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={addPayment} disabled={saving || !payAmount}>
                 {saving ? 'שומר...' : 'רשום תשלום'}
               </button>
               <button className="btn btn-ghost" onClick={() => setPaymentModal(null)}>ביטול</button>
