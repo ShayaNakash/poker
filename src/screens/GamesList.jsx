@@ -6,7 +6,7 @@ import { useToast } from '../lib/toast'
 import { useTheme } from '../lib/useTheme'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
-import { Plus, Lock, Play, ChevronLeft, BarChart2, LogOut, Trophy, Trash2, Share2, MessageCircle, Shield, Sun, Moon } from 'lucide-react'
+import { Plus, Lock, Play, ChevronLeft, BarChart2, LogOut, Trophy, Trash2, Share2, MessageCircle, Shield, Sun, Moon, Menu, X } from 'lucide-react'
 
 const ADMIN_EMAILS = ['shayanakash1@gmail.com', 'idanakash@gmail.com']
 
@@ -20,6 +20,7 @@ export default function GamesList() {
   const [loading, setLoading] = useState(true)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => { loadGames() }, [])
 
@@ -44,6 +45,7 @@ export default function GamesList() {
     const text = 'ניהול משחקי פוקר מזומן — ZugKing 🃏'
     try { await navigator.share({ title: 'ZugKing', text, url }) }
     catch { await navigator.clipboard.writeText(url); showToast('קישור האפליקציה הועתק ✓', 'success') }
+    setMenuOpen(false)
   }
 
   async function deleteGame(game) {
@@ -51,19 +53,14 @@ export default function GamesList() {
     try {
       const { data: gps } = await supabase.from('game_players').select('id').eq('game_id', game.id)
       const gpIds = gps?.map(g => g.id) || []
-      if (gpIds.length > 0) {
-        await supabase.from('buyins').delete().in('game_player_id', gpIds)
-      }
+      if (gpIds.length > 0) await supabase.from('buyins').delete().in('game_player_id', gpIds)
       const { data: setts } = await supabase.from('settlements').select('id').eq('game_id', game.id)
       const settIds = setts?.map(s => s.id) || []
-      if (settIds.length > 0) {
-        await supabase.from('settlement_payments').delete().in('settlement_id', settIds)
-      }
+      if (settIds.length > 0) await supabase.from('settlement_payments').delete().in('settlement_id', settIds)
       await supabase.from('settlements').delete().eq('game_id', game.id)
       await supabase.from('game_players').delete().eq('game_id', game.id)
       await supabase.from('audit_logs').delete().eq('game_id', game.id)
       await supabase.from('games').delete().eq('id', game.id)
-
       setGames(prev => prev.filter(g => g.id !== game.id))
       setDeleteConfirm(null)
       showToast('המשחק נמחק ✓', 'success')
@@ -89,29 +86,55 @@ export default function GamesList() {
             {user.email}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
           <button className="btn btn-ghost btn-sm" onClick={toggleTheme} title={isDark ? 'מצב בהיר' : 'מצב כהה'}>
             {isDark ? <Sun size={16} /> : <Moon size={16} />}
           </button>
-          <button className="btn btn-ghost btn-sm" onClick={shareApp} title="שתף את האפליקציה">
-            <Share2 size={16} />
-          </button>
-          <button className="btn btn-ghost btn-sm" onClick={() => navigate('/history')}>
-            <BarChart2 size={16} />
-          </button>
-          <button className="btn btn-ghost btn-sm" onClick={() => navigate('/feedback')} title="פידבק">
-            <MessageCircle size={16} />
-          </button>
-          {ADMIN_EMAILS.includes(user?.email) && (
-            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/admin-stats')} title="Admin">
-              <Shield size={16} color="var(--gold)" />
-            </button>
-          )}
-          <button className="btn btn-ghost btn-sm" onClick={handleSignOut}>
-            <LogOut size={16} />
+          <button className="btn btn-ghost btn-sm" onClick={() => setMenuOpen(prev => !prev)}>
+            {menuOpen ? <X size={16} /> : <Menu size={16} />}
           </button>
         </div>
       </div>
+
+      {/* Dropdown menu */}
+      {menuOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 150,
+        }} onClick={() => setMenuOpen(false)}>
+          <div style={{
+            position: 'absolute',
+            top: 'calc(env(safe-area-inset-top) + 60px)',
+            left: 12, right: 12,
+            background: 'var(--bg2)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)',
+            overflow: 'hidden',
+            boxShadow: 'var(--shadow-lg)',
+            zIndex: 151,
+          }} onClick={e => e.stopPropagation()}>
+            {[
+              { icon: <BarChart2 size={16} />, label: 'היסטוריה וסטטיסטיקות', action: () => { navigate('/history'); setMenuOpen(false) } },
+              { icon: <MessageCircle size={16} />, label: 'שלח פידבק', action: () => { navigate('/feedback'); setMenuOpen(false) } },
+              { icon: <Share2 size={16} />, label: 'שתף את האפליקציה', action: shareApp },
+              ...(ADMIN_EMAILS.includes(user?.email) ? [{ icon: <Shield size={16} color="var(--gold)" />, label: 'Admin Dashboard', action: () => { navigate('/admin-stats'); setMenuOpen(false) } }] : []),
+              { icon: <LogOut size={16} />, label: 'התנתק', action: handleSignOut, danger: true },
+            ].map((item, i) => (
+              <button key={i} onClick={item.action} style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                padding: '14px 16px',
+                background: 'none', border: 'none',
+                borderBottom: i < 3 ? '1px solid var(--border)' : 'none',
+                color: item.danger ? 'var(--red)' : 'var(--text)',
+                fontFamily: 'Heebo', fontSize: '0.95rem', fontWeight: 500,
+                cursor: 'pointer', textAlign: 'right',
+              }}>
+                <span style={{ color: item.danger ? 'var(--red)' : 'var(--text2)' }}>{item.icon}</span>
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="content">
         <button
