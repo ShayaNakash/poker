@@ -2,15 +2,17 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/authContext'
 import { useToast } from '../lib/toast'
+import { Eye, EyeOff } from 'lucide-react'
 
 export default function AuthScreen() {
   const { signIn, signUp } = useAuth()
   const showToast = useToast()
   const navigate = useNavigate()
 
-  const [mode, setMode] = useState('login') // login | signup
+  const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [signupDone, setSignupDone] = useState(false)
 
@@ -40,7 +42,6 @@ export default function AuthScreen() {
     setLoading(false)
   }
 
-  // After signup — show confirmation message
   if (signupDone) {
     return (
       <div className="screen" style={{ justifyContent: 'center', alignItems: 'center' }}>
@@ -99,17 +100,12 @@ export default function AuthScreen() {
               key={tab.key}
               onClick={() => setMode(tab.key)}
               style={{
-                flex: 1,
-                padding: '10px',
-                border: 'none',
+                flex: 1, padding: '10px', border: 'none',
                 borderRadius: 'var(--radius-sm)',
                 background: mode === tab.key ? 'var(--card2)' : 'transparent',
                 color: mode === tab.key ? 'var(--gold)' : 'var(--text3)',
-                fontFamily: 'Heebo',
-                fontWeight: 700,
-                fontSize: '0.95rem',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
+                fontFamily: 'Heebo', fontWeight: 700, fontSize: '0.95rem',
+                cursor: 'pointer', transition: 'all 0.15s',
               }}
             >
               {tab.label}
@@ -133,14 +129,36 @@ export default function AuthScreen() {
 
         <div className="form-group">
           <label className="form-label">סיסמה</label>
-          <input
-            type="password"
-            placeholder="לפחות 6 תווים"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-          />
+          <div style={{ position: 'relative' }}>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              placeholder="לפחות 6 תווים"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              style={{ paddingLeft: 44 }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(prev => !prev)}
+              style={{
+                position: 'absolute',
+                left: 12,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                color: 'var(--text3)',
+                cursor: 'pointer',
+                padding: 4,
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
         </div>
 
         <button
