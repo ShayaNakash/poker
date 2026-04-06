@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/authContext'
 import { useToast } from '../lib/toast'
+import { useTheme } from '../lib/useTheme'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
-import { Plus, Lock, Play, ChevronLeft, BarChart2, LogOut, Trophy, Trash2, Share2, MessageCircle, Shield } from 'lucide-react'
+import { Plus, Lock, Play, ChevronLeft, BarChart2, LogOut, Trophy, Trash2, Share2, MessageCircle, Shield, Sun, Moon } from 'lucide-react'
 
 const ADMIN_EMAILS = ['shayanakash1@gmail.com', 'idanakash@gmail.com']
 
@@ -13,6 +14,7 @@ export default function GamesList() {
   const navigate = useNavigate()
   const { user, signOut } = useAuth()
   const showToast = useToast()
+  const { isDark, toggleTheme } = useTheme()
 
   const [games, setGames] = useState([])
   const [loading, setLoading] = useState(true)
@@ -39,8 +41,8 @@ export default function GamesList() {
 
   async function shareApp() {
     const url = 'https://zugking.com'
-    const text = 'ניהול משחקי פוקר מזומן — פוקר עם החבר\'ה 🃏'
-    try { await navigator.share({ title: 'פוקר עם החבר\'ה', text, url }) }
+    const text = 'ניהול משחקי פוקר מזומן — ZugKing 🃏'
+    try { await navigator.share({ title: 'ZugKing', text, url }) }
     catch { await navigator.clipboard.writeText(url); showToast('קישור האפליקציה הועתק ✓', 'success') }
   }
 
@@ -88,6 +90,9 @@ export default function GamesList() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-ghost btn-sm" onClick={toggleTheme} title={isDark ? 'מצב בהיר' : 'מצב כהה'}>
+            {isDark ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
           <button className="btn btn-ghost btn-sm" onClick={shareApp} title="שתף את האפליקציה">
             <Share2 size={16} />
           </button>
