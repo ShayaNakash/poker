@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/authContext'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
-import { ChevronRight, Users, Gamepad2, TrendingUp, Wifi, RefreshCw, Circle } from 'lucide-react'
+import { ChevronRight, ChevronDown, Users, Gamepad2, TrendingUp, Wifi, RefreshCw, Circle } from 'lucide-react'
 
 const ADMIN_EMAILS = ['shayanakash1@gmail.com', 'idanakash@gmail.com']
 const ONLINE_THRESHOLD_MINUTES = 5
@@ -14,6 +14,11 @@ export default function AdminStats() {
   const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [showUsers, setShowUsers] = useState(false)
+  const [expandedUser, setExpandedUser] = useState(null)
+  const [userGames, setUserGames] = useState({}) // { [userId]: games[] }
+  const [loadingGames, setLoadingGames] = useState(null)
+
   const [stats, setStats] = useState({
     totalUsers: 0,
     newUsersWeek: 0,
@@ -29,7 +34,6 @@ export default function AdminStats() {
     onlineUserIds: [],
   })
 
-  // Update presence
   useEffect(() => {
     if (!user) return
     const updatePresence = async () => {
@@ -110,7 +114,24 @@ export default function AdminStats() {
     return () => clearInterval(interval)
   }, [loadStats])
 
-  // Block non-admin
+  async function toggleUserGames(profile) {
+    if (expandedUser === profile.id) {
+      setExpandedUser(null)
+      return
+    }
+    setExpandedUser(profile.id)
+    if (userGames[profile.id]) return // already loaded
+
+    setLoadingGames(profile.id)
+    const { data } = await supabase
+      .from('games')
+      .select('*')
+      .eq('user_id', profile.id)
+      .order('created_at', { ascending: false })
+    setUserGames(prev => ({ ...prev, [profile.id]: data || [] }))
+    setLoadingGames(null)
+  }
+
   if (!ADMIN_EMAILS.includes(user?.email)) {
     return (
       <div className="loading-screen">
@@ -175,7 +196,7 @@ export default function AdminStats() {
         {/* Stats grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
           {[
-            { icon: <Users size={18} />, label: 'שחקנים רשומים', value: stats.totalUsers, sub: `+${stats.newUsersWeek} השבוע`, color: 'var(--blue)' },
+            { icon: <Users size={18} />, label: 'משתמשים רשומים', value: stats.allProfiles.length, sub: `+${stats.newUsersWeek} השבוע`, color: 'var(--blue)' },
             { icon: <Users size={18} />, label: 'הצטרפו היום', value: stats.newUsersToday, sub: `+${stats.newUsersWeek} השבוע`, color: 'var(--gold)' },
             { icon: <Gamepad2 size={18} />, label: 'סה"כ משחקים', value: stats.totalGames, sub: `${stats.gamesThisWeek} השבוע`, color: 'var(--purple)' },
             { icon: <Gamepad2 size={18} />, label: 'משחקים פעילים', value: stats.activeGames, sub: 'כרגע', color: 'var(--green)' },
@@ -196,16 +217,8 @@ export default function AdminStats() {
         {stats.recentGames.map(game => {
           const s = statusLabel[game.status] || statusLabel.active
           return (
-            <div
-              key={game.id}
-              className="card"
-              style={{ marginBottom: 8, cursor: 'pointer' }}
-              onClick={() => navigate(
-                game.status === 'active'
-                  ? `/view/${game.viewer_token}`
-                  : `/game/${game.id}/settlements`
-              )}
-            >
+            <div key={game.id} className="card" style={{ marginBottom: 8, cursor: 'pointer' }}
+              onClick={() => navigate(game.status === 'active' ? `/view/${game.viewer_token}` : `/game/${game.id}/settlements`)}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{game.title}</div>
@@ -222,30 +235,95 @@ export default function AdminStats() {
           )
         })}
 
-        {/* Users list */}
-        <div className="section-title">משתמשים רשומים ({stats.allProfiles.length})</div>
-        {stats.allProfiles.map(profile => {
+        {/* Users list — collapsible */}
+        <button
+          onClick={() => setShowUsers(prev => !prev)}
+          style={{
+            width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            background: 'none', border: 'none', padding: '16px 0 10px',
+            cursor: 'pointer',
+          }}
+        >
+          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            משתמשים רשומים ({stats.allProfiles.length})
+          </span>
+          <ChevronDown size={16} color="var(--text3)"
+            style={{ transform: showUsers ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
+        </button>
+
+        {showUsers && stats.allProfiles.map(profile => {
           const isOnline = stats.onlineUserIds.includes(profile.id)
+          const isExpanded = expandedUser === profile.id
+          const games = userGames[profile.id] || []
+          const isLoadingThis = loadingGames === profile.id
+
           return (
             <div key={profile.id} className="card" style={{ marginBottom: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              {/* User row */}
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+                onClick={() => toggleUserGames(profile)}
+              >
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{profile.email}</div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{profile.email}</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginTop: 2 }}>
                     נרשם: {format(new Date(profile.created_at), 'dd/MM/yy', { locale: he })}
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Circle
                     size={10}
                     fill={isOnline ? 'var(--green)' : 'var(--border)'}
                     color={isOnline ? 'var(--green)' : 'var(--border)'}
                   />
-                  <span style={{ fontSize: '0.75rem', color: isOnline ? 'var(--green)' : 'var(--text3)' }}>
+                  <span style={{ fontSize: '0.72rem', color: isOnline ? 'var(--green)' : 'var(--text3)' }}>
                     {isOnline ? 'Online' : 'Offline'}
                   </span>
+                  <ChevronDown size={14} color="var(--text3)"
+                    style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
                 </div>
               </div>
+
+              {/* Expanded games */}
+              {isExpanded && (
+                <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                  {isLoadingThis ? (
+                    <div style={{ textAlign: 'center', padding: 8 }}><div className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /></div>
+                  ) : games.length === 0 ? (
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text3)', textAlign: 'center', padding: '8px 0' }}>אין משחקים</div>
+                  ) : (
+                    games.map(game => {
+                      const s = statusLabel[game.status] || statusLabel.active
+                      return (
+                        <div
+                          key={game.id}
+                          style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            padding: '8px 10px', borderRadius: 'var(--radius-sm)',
+                            background: 'var(--bg3)', marginBottom: 6, cursor: 'pointer',
+                          }}
+                          onClick={() => navigate(
+                            game.status === 'active'
+                              ? `/view/${game.viewer_token}`
+                              : `/game/${game.id}/settlements`
+                          )}
+                        >
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{game.title || 'ערב פוקר'}</div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text3)' }}>
+                              {format(new Date(game.created_at), 'dd/MM/yy HH:mm', { locale: he })}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span className={`badge ${s.cls}`} style={{ fontSize: '0.68rem', padding: '2px 8px' }}>{s.label}</span>
+                            <ChevronRight size={12} color="var(--text3)" />
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              )}
             </div>
           )
         })}
