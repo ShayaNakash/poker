@@ -2,28 +2,32 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { settlementStatus } from '../utils/settlement'
+import { useTheme } from '../lib/useTheme'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
-import { Eye, CheckCircle, Clock, AlertCircle, Trophy } from 'lucide-react'
+import { Eye, CheckCircle, Clock, AlertCircle, Trophy, RefreshCw, Sun, Moon } from 'lucide-react'
 
 export default function ViewerPage() {
   const { token } = useParams()
+  const { isDark, toggleTheme } = useTheme()
   const [game, setGame] = useState(null)
   const [gamePlayers, setGamePlayers] = useState([])
   const [buyins, setBuyins] = useState([])
   const [settlements, setSettlements] = useState([])
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [activeTab, setActiveTab] = useState('live')
 
-  async function loadData() {
+  async function loadData(showRefresh = false) {
+    if (showRefresh) setRefreshing(true)
     const { data: g } = await supabase
       .from('games')
       .select('*')
       .eq('viewer_token', token)
       .single()
 
-    if (!g) { setLoading(false); return }
+    if (!g) { setLoading(false); setRefreshing(false); return }
     setGame(g)
 
     const [{ data: gp }, { data: b }, { data: s }, { data: p }] = await Promise.all([
@@ -37,22 +41,22 @@ export default function ViewerPage() {
     setSettlements(s || [])
     setPayments(p || [])
     setLoading(false)
+    setRefreshing(false)
   }
 
   useEffect(() => {
     loadData()
 
-    // Realtime subscription
     let gameId
     supabase.from('games').select('id').eq('viewer_token', token).single().then(({ data }) => {
       if (!data) return
       gameId = data.id
       const channel = supabase
         .channel(`viewer-${token}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'buyins', filter: `game_id=eq.${gameId}` }, loadData)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'game_players', filter: `game_id=eq.${gameId}` }, loadData)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'settlements', filter: `game_id=eq.${gameId}` }, loadData)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'settlement_payments' }, loadData)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'buyins', filter: `game_id=eq.${gameId}` }, () => loadData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'game_players', filter: `game_id=eq.${gameId}` }, () => loadData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'settlements', filter: `game_id=eq.${gameId}` }, () => loadData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'settlement_payments' }, () => loadData())
         .subscribe()
     })
   }, [token])
@@ -84,9 +88,6 @@ export default function ViewerPage() {
   )
 
   const isEnded = game.status !== 'active'
-  const tabs = isEnded
-    ? ['live', 'results', 'settlements']
-    : ['live']
 
   return (
     <div className="screen">
@@ -107,8 +108,27 @@ export default function ViewerPage() {
             </div>
           </div>
         </div>
-        <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: '1.1rem' }}>
-          ₪{totalPot()}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontWeight: 800, color: 'var(--gold)', fontSize: '1.1rem' }}>
+            ₪{totalPot()}
+          </div>
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ padding: '8px' }}
+            onClick={toggleTheme}
+            title={isDark ? 'מצב בהיר' : 'מצב כהה'}
+          >
+            {isDark ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ padding: '8px' }}
+            onClick={() => loadData(true)}
+            disabled={refreshing}
+            title="רענן"
+          >
+            <RefreshCw size={16} style={{ animation: refreshing ? 'spin 0.7s linear infinite' : 'none' }} />
+          </button>
         </div>
       </div>
 
@@ -124,14 +144,9 @@ export default function ViewerPage() {
               key={t.key}
               onClick={() => setActiveTab(t.key)}
               style={{
-                flex: 1,
-                padding: '12px',
-                border: 'none',
-                background: 'none',
+                flex: 1, padding: '12px', border: 'none', background: 'none',
                 color: activeTab === t.key ? 'var(--gold)' : 'var(--text2)',
-                fontFamily: 'Heebo',
-                fontWeight: 600,
-                fontSize: '0.82rem',
+                fontFamily: 'Heebo', fontWeight: 600, fontSize: '0.82rem',
                 borderBottom: `2px solid ${activeTab === t.key ? 'var(--gold)' : 'transparent'}`,
                 cursor: 'pointer',
               }}
@@ -207,8 +222,7 @@ export default function ViewerPage() {
                           </div>
                         </div>
                       </div>
-                      <div className={pl > 0 ? 'amount-pos' : pl < 0 ? 'amount-neg' : 'amount-zero'}
-                        style={{ fontSize: '1.3rem' }}>
+                      <div className={pl > 0 ? 'amount-pos' : pl < 0 ? 'amount-neg' : 'amount-zero'} style={{ fontSize: '1.3rem' }}>
                         {pl > 0 ? '+' : ''}₪{pl}
                       </div>
                     </div>
