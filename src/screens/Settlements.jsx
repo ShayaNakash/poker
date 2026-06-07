@@ -166,9 +166,9 @@ export default function Settlements() {
         }}>
           <AlertTriangle size={15} style={{ flexShrink: 0 }} />
           <span>
-            {chipDiff < 0
-              ? `חסרו ${Math.abs(chipDiff)} צ'יפים — הרווחים הופחתו יחסית`
-              : `עדפו ${chipDiff} צ'יפים — ההפסדים הופחתו יחסית`}
+            {chipDiff > 0
+              ? `עדפו ${chipDiff} צ'יפים — הרווחים הופחתו יחסית`
+              : `חסרו ${Math.abs(chipDiff)} צ'יפים — ההפסדים הופחתו יחסית`}
           </span>
         </div>
       )}
