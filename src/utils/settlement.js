@@ -49,6 +49,65 @@ export function computeSettlements(players) {
 }
 
 /**
+ * Normalize balances so that sum of gains === sum of losses.
+ * If there's a chip imbalance, distribute it proportionally:
+ * - Chip shortage: reduce winners' gains proportionally
+ * - Chip surplus: reduce losers' losses proportionally
+ *
+ * Returns { normalizedPlayers, chipDiff }
+ * chipDiff > 0 means surplus, < 0 means shortage
+ */
+export function normalizeBalances(players) {
+  const totalGains = players.filter(p => p.balance > 0).reduce((s, p) => s + p.balance, 0)
+  const totalLosses = players.filter(p => p.balance < 0).reduce((s, p) => s + Math.abs(p.balance), 0)
+  const chipDiff = totalGains - totalLosses // positive = surplus, negative = shortage
+
+  if (chipDiff === 0) return { normalizedPlayers: players, chipDiff: 0 }
+
+  const normalized = players.map(p => {
+    if (chipDiff < 0) {
+      // Shortage: reduce winners proportionally
+      if (p.balance > 0) {
+        const reduction = Math.round(p.balance * (Math.abs(chipDiff) / totalGains))
+        return { ...p, balance: p.balance - reduction }
+      }
+    } else {
+      // Surplus: reduce losers' losses proportionally
+      if (p.balance < 0) {
+        const reduction = Math.round(Math.abs(p.balance) * (chipDiff / totalLosses))
+        return { ...p, balance: p.balance + reduction }
+      }
+    }
+    return p
+  })
+
+  // Fix any rounding remainder on the largest winner/loser
+  const newGains = normalized.filter(p => p.balance > 0).reduce((s, p) => s + p.balance, 0)
+  const newLosses = normalized.filter(p => p.balance < 0).reduce((s, p) => s + Math.abs(p.balance), 0)
+  const remainder = newGains - newLosses
+
+  if (remainder !== 0) {
+    if (remainder > 0) {
+      // Remove remainder from largest winner
+      const largest = normalized.filter(p => p.balance > 0).sort((a, b) => b.balance - a.balance)[0]
+      if (largest) {
+        const idx = normalized.findIndex(p => p.id === largest.id)
+        normalized[idx] = { ...normalized[idx], balance: normalized[idx].balance - remainder }
+      }
+    } else {
+      // Add remainder to largest loser (reduce their loss)
+      const largest = normalized.filter(p => p.balance < 0).sort((a, b) => a.balance - b.balance)[0]
+      if (largest) {
+        const idx = normalized.findIndex(p => p.id === largest.id)
+        normalized[idx] = { ...normalized[idx], balance: normalized[idx].balance - remainder }
+      }
+    }
+  }
+
+  return { normalizedPlayers: normalized, chipDiff }
+}
+
+/**
  * Given game_players with ending_chips set and their buyins,
  * compute balances for each player.
  */
@@ -73,15 +132,11 @@ export function computeBalances(gamePlayers, buyins, rate = 20, expenses = []) {
       if (splitAmong.length === 0) return
       const share = Math.round(exp.amount / splitAmong.length)
 
-      // If this player paid — they receive money from others
       if (exp.paid_by_name === gp.player_name) {
-        // They paid the full amount, others owe them their share
         const othersShare = splitAmong.filter(n => n !== gp.player_name).length * share
         expenseBalance += othersShare
-        // If they're also in the split, they owe themselves (cancel out)
       }
 
-      // If this player is in the split — they owe their share
       if (splitAmong.includes(gp.player_name) && exp.paid_by_name !== gp.player_name) {
         expenseBalance -= share
       }
