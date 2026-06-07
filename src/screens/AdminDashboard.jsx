@@ -666,8 +666,8 @@ function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, ga
             <AlertTriangle size={16} />
             <span>
               {chipsEntered > totalChipsGame
-                ? `עודף ${chipsEntered - totalChipsGame} צ'יפים — יקוזז מהמרוויחים`
-                : `חסר ${totalChipsGame - chipsEntered} צ'יפים — יקוזז מהמפסידים`}
+                ? `קיים עודף של ${chipsEntered - totalChipsGame} צ'יפים — הרווחים יופחתו יחסית`
+                : `קיים חוסר של ${totalChipsGame - chipsEntered} צ'יפים — ההפסדים יופחתו יחסית`}
             </span>
           </div>
         )}
