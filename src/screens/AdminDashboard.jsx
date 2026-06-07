@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
 import { useAuth } from '../lib/authContext'
-import { computeSettlements, computeBalances } from '../utils/settlement'
+import { computeSettlements, computeBalances, normalizeBalances } from '../utils/settlement'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import {
@@ -595,13 +595,32 @@ function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, ga
       for (const gp of gamePlayers) {
         if (!gp.exited_at) await supabase.from('game_players').update({ ending_chips: parseInt(chips[gp.id]) || 0 }).eq('id', gp.id)
       }
-      const updatedPlayers = gamePlayers.map(gp => ({ ...gp, ending_chips: gp.exited_at ? (gp.ending_chips || 0) : (parseInt(chips[gp.id]) || 0) }))
+      const updatedPlayers = gamePlayers.map(gp => ({
+        ...gp,
+        ending_chips: gp.exited_at ? (gp.ending_chips || 0) : (parseInt(chips[gp.id]) || 0)
+      }))
       const balances = computeBalances(updatedPlayers, buyins, rate, expenses)
-      const transfers = computeSettlements(balances)
+
+      // Normalize balances to handle chip imbalance
+      const { normalizedPlayers, chipDiff } = normalizeBalances(balances)
+
+      const transfers = computeSettlements(normalizedPlayers)
       if (transfers.length > 0) {
-        await supabase.from('settlements').insert(transfers.map(t => ({ game_id: gameId, from_player_id: t.from_player_id, to_player_id: t.to_player_id, from_player_name: t.from_player_name, to_player_name: t.to_player_name, required_amount: t.required_amount })))
+        await supabase.from('settlements').insert(transfers.map(t => ({
+          game_id: gameId,
+          from_player_id: t.from_player_id,
+          to_player_id: t.to_player_id,
+          from_player_name: t.from_player_name,
+          to_player_name: t.to_player_name,
+          required_amount: t.required_amount,
+        })))
       }
-      await supabase.from('games').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', gameId)
+      await supabase.from('games').update({
+        status: 'ended',
+        ended_at: new Date().toISOString(),
+        chip_diff: chipDiff,
+      }).eq('id', gameId)
+
       localStorage.removeItem(storageKey)
       showToast('המשחק הסתיים ✓', 'success')
       onDone()
@@ -645,7 +664,11 @@ function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, ga
         {!balanced && chipsEntered > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--orange)', fontSize: '0.85rem', marginBottom: 12, padding: '8px 12px', background: 'rgba(230,126,34,0.1)', borderRadius: 'var(--radius-sm)' }}>
             <AlertTriangle size={16} />
-            <span>{chipsEntered > totalChipsGame ? `יש ${chipsEntered - totalChipsGame} צ'יפים יותר` : `חסרים ${totalChipsGame - chipsEntered} צ'יפים`}</span>
+            <span>
+              {chipsEntered > totalChipsGame
+                ? `עודף ${chipsEntered - totalChipsGame} צ'יפים — יקוזז מהמפסידים`
+                : `חסר ${totalChipsGame - chipsEntered} צ'יפים — יקוזז מהמרוויחים`}
+            </span>
           </div>
         )}
 
@@ -684,19 +707,13 @@ function InlineEndGame({ game, gamePlayers, buyins, expenses, onBack, onDone, ga
           )
         })}
 
-        <button className="btn btn-primary btn-lg" style={{ width: '100%', marginTop: 20 }} onClick={endGame} disabled={saving || !balanced}>
+        <button className="btn btn-primary btn-lg" style={{ width: '100%', marginTop: 20 }} onClick={endGame} disabled={saving || !allFilled}>
           {saving ? 'שומר...' : <><Trophy size={18} /> סיים וצור סילוקים</>}
         </button>
 
         {!balanced && allFilled && chipsEntered > 0 && (
-          <button className="btn btn-ghost" style={{ width: '100%', marginTop: 10, color: 'var(--orange)', borderColor: 'var(--orange)', fontSize: '0.85rem' }} onClick={endGame} disabled={saving}>
-            <AlertTriangle size={14} /> סיים בכל זאת (ספירה לא מאוזנת)
-          </button>
-        )}
-
-        {!balanced && chipsEntered > 0 && (
           <div style={{ textAlign: 'center', color: 'var(--text3)', fontSize: '0.8rem', marginTop: 8 }}>
-            סה"כ הצ'יפים חייב להיות {totalChipsGame}
+            הסילוקים יחושבו עם תיקון אוטומטי לאיזון הצ'יפים
           </div>
         )}
       </div>
