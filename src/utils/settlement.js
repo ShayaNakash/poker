@@ -65,16 +65,16 @@ export function normalizeBalances(players) {
   if (chipDiff === 0) return { normalizedPlayers: players, chipDiff: 0 }
 
   const normalized = players.map(p => {
-    if (chipDiff < 0) {
-      // Shortage: reduce winners proportionally
+    if (chipDiff > 0) {
+      // Surplus: reduce winners' gains proportionally
       if (p.balance > 0) {
-        const reduction = Math.round(p.balance * (Math.abs(chipDiff) / totalGains))
+        const reduction = Math.round(p.balance * (chipDiff / totalGains))
         return { ...p, balance: p.balance - reduction }
       }
     } else {
-      // Surplus: reduce losers' losses proportionally
+      // Shortage: reduce losers' losses proportionally
       if (p.balance < 0) {
-        const reduction = Math.round(Math.abs(p.balance) * (chipDiff / totalLosses))
+        const reduction = Math.round(Math.abs(p.balance) * (Math.abs(chipDiff) / totalLosses))
         return { ...p, balance: p.balance + reduction }
       }
     }
