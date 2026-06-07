@@ -5,7 +5,7 @@ import { settlementStatus } from '../utils/settlement'
 import { useToast } from '../lib/toast'
 import { useAuth } from '../lib/authContext'
 import { format } from 'date-fns'
-import { ChevronRight, Plus, CreditCard, Banknote, Smartphone, CheckCircle, Clock, AlertCircle, Share2, MessageCircle } from 'lucide-react'
+import { ChevronRight, Plus, CreditCard, Banknote, Smartphone, CheckCircle, Clock, AlertCircle, Share2, MessageCircle, AlertTriangle } from 'lucide-react'
 
 const METHOD_ICONS = {
   cash: <Banknote size={14} />,
@@ -69,6 +69,7 @@ export default function Settlements() {
 
   const rate = game?.chips_per_20 || 20
   const chipsToIls = (chips) => Math.round(chips / rate * 20)
+  const chipDiff = game?.chip_diff || 0
 
   function settlementPayments(sId) {
     return payments.filter(p => p.settlement_id === sId)
@@ -94,7 +95,6 @@ export default function Settlements() {
     showToast(`תשלום ₪${amount} נרשם ✓`, 'success')
   }
 
-  // Share functions
   async function shareViewerLink() {
     if (!game) return
     const url = `${window.location.origin}/view/${game.viewer_token}`
@@ -104,10 +104,14 @@ export default function Settlements() {
 
   function shareWhatsApp() {
     if (!game || settlements.length === 0) return
+    const imbalanceNote = chipDiff !== 0
+      ? `\n⚠️ _ספירת צ'יפים לא מאוזנת (${chipDiff > 0 ? '+' : ''}${chipDiff}) — סילוקים מותאמים אוטומטית_`
+      : ''
 
     const lines = [
       `🃏 *ZugKing — סילוקים*`,
       `*${game.title}*`,
+      imbalanceNote,
       ``,
       ...settlements.map(s => {
         const sPayments = settlementPayments(s.id)
@@ -131,32 +135,46 @@ export default function Settlements() {
       <div className="header">
         <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}><ChevronRight size={18} /></button>
         <div>
-          <div className="header-title">סילוקים</div>
+          <div className="header-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            סילוקים
+            {chipDiff !== 0 && (
+              <span title={`ספירת צ'יפים לא מאוזנת: ${chipDiff > 0 ? '+' : ''}${chipDiff} צ'יפים`}
+                style={{ color: 'var(--orange)', fontSize: '0.75rem', cursor: 'help' }}>
+                ⚠️
+              </span>
+            )}
+          </div>
           <div className="header-sub">{game?.title}</div>
         </div>
-        {/* Share buttons */}
         <div style={{ display: 'flex', gap: 6 }}>
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={shareWhatsApp}
-            title="שלח לווטסאפ"
-            style={{ padding: '8px' }}
-          >
+          <button className="btn btn-ghost btn-sm" onClick={shareWhatsApp} title="שלח לווטסאפ" style={{ padding: '8px' }}>
             <MessageCircle size={16} />
           </button>
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={shareViewerLink}
-            title="שתף קישור"
-            style={{ padding: '8px' }}
-          >
+          <button className="btn btn-ghost btn-sm" onClick={shareViewerLink} title="שתף קישור" style={{ padding: '8px' }}>
             <Share2 size={16} />
           </button>
         </div>
       </div>
 
+      {/* Chip imbalance notice */}
+      {chipDiff !== 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          background: 'rgba(230,126,34,0.1)', border: '1px solid rgba(230,126,34,0.3)',
+          borderRadius: 'var(--radius)', padding: '10px 14px', margin: '8px 16px 0',
+          fontSize: '0.82rem', color: 'var(--orange)',
+        }}>
+          <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+          <span>
+            {chipDiff < 0
+              ? `חסרו ${Math.abs(chipDiff)} צ'יפים — הרווחים הופחתו יחסית`
+              : `עדפו ${chipDiff} צ'יפים — ההפסדים הופחתו יחסית`}
+          </span>
+        </div>
+      )}
+
       {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg2)' }}>
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg2)', marginTop: chipDiff !== 0 ? 8 : 0 }}>
         {[
           { key: 'settlements', label: 'העברות' },
           { key: 'summary', label: 'סיכום' },
@@ -175,32 +193,21 @@ export default function Settlements() {
 
       <div className="content" style={{ paddingBottom: 24 }}>
 
-        {/* Share bar */}
-        <div style={{
-          display: 'flex', gap: 10, marginBottom: 16,
-        }}>
-          <button
-            onClick={shareWhatsApp}
-            style={{
-              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              padding: '10px', borderRadius: 'var(--radius)',
-              background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.3)',
-              color: '#25d366', fontFamily: 'Heebo', fontWeight: 700, fontSize: '0.85rem',
-              cursor: 'pointer',
-            }}
-          >
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+          <button onClick={shareWhatsApp} style={{
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: '10px', borderRadius: 'var(--radius)',
+            background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.3)',
+            color: '#25d366', fontFamily: 'Heebo', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
+          }}>
             <MessageCircle size={16} /> שלח לווטסאפ
           </button>
-          <button
-            onClick={shareViewerLink}
-            style={{
-              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              padding: '10px', borderRadius: 'var(--radius)',
-              background: 'rgba(212,168,83,0.1)', border: '1px solid rgba(212,168,83,0.3)',
-              color: 'var(--gold)', fontFamily: 'Heebo', fontWeight: 700, fontSize: '0.85rem',
-              cursor: 'pointer',
-            }}
-          >
+          <button onClick={shareViewerLink} style={{
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: '10px', borderRadius: 'var(--radius)',
+            background: 'rgba(212,168,83,0.1)', border: '1px solid rgba(212,168,83,0.3)',
+            color: 'var(--gold)', fontFamily: 'Heebo', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
+          }}>
             <Share2 size={16} /> שתף קישור
           </button>
         </div>
@@ -358,7 +365,6 @@ export default function Settlements() {
         )}
       </div>
 
-      {/* Payment modal */}
       {paymentModal && (
         <div className="modal-overlay" onClick={() => setPaymentModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
