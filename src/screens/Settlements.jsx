@@ -167,8 +167,8 @@ export default function Settlements() {
           <AlertTriangle size={15} style={{ flexShrink: 0 }} />
           <span>
             {chipDiff > 0
-              ? `עדפו ${chipDiff} צ'יפים — הרווחים הופחתו יחסית`
-              : `חסרו ${Math.abs(chipDiff)} צ'יפים — ההפסדים הופחתו יחסית`}
+              ? `קיים עודף של ${chipDiff} צ'יפים — הרווחים הופחתו יחסית`
+              : `קיים חוסר של ${Math.abs(chipDiff)} צ'יפים — ההפסדים הופחתו יחסית`}
           </span>
         </div>
       )}
@@ -326,6 +326,28 @@ export default function Settlements() {
 
                 const totalPL = pokerPL + expenseBalance
 
+                // Compute adjusted PL after chip imbalance correction
+                let adjustedPL = null
+                if (chipDiff !== 0 && pokerPL !== 0) {
+                  const totalGains = gamePlayers.reduce((s, p) => {
+                    const pBuyins = buyins.filter(b => b.game_player_id === p.id && !b.deleted_at).reduce((a, b) => a + b.amount_ils, 0)
+                    const pl = chipsToIls(p.ending_chips ?? 0) - pBuyins
+                    return pl > 0 ? s + pl : s
+                  }, 0)
+                  const totalLosses = gamePlayers.reduce((s, p) => {
+                    const pBuyins = buyins.filter(b => b.game_player_id === p.id && !b.deleted_at).reduce((a, b) => a + b.amount_ils, 0)
+                    const pl = chipsToIls(p.ending_chips ?? 0) - pBuyins
+                    return pl < 0 ? s + Math.abs(pl) : s
+                  }, 0)
+                  if (chipDiff > 0 && pokerPL > 0 && totalGains > 0) {
+                    const reduction = Math.round(pokerPL * (chipDiff / totalGains))
+                    adjustedPL = totalPL - reduction
+                  } else if (chipDiff < 0 && pokerPL < 0 && totalLosses > 0) {
+                    const reduction = Math.round(Math.abs(pokerPL) * (Math.abs(chipDiff) / totalLosses))
+                    adjustedPL = totalPL + reduction
+                  }
+                }
+
                 return (
                   <div key={gp.id} className="card" style={{ marginBottom: 10 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -339,7 +361,14 @@ export default function Settlements() {
                         </div>
                       </div>
                       <div className={totalPL > 0 ? 'amount-pos' : totalPL < 0 ? 'amount-neg' : 'amount-zero'} style={{ fontSize: '1.3rem' }}>
-                        {totalPL > 0 ? '+' : ''}₪{totalPL}
+                        {adjustedPL !== null ? (
+                          <div style={{ textAlign: 'left' }}>
+                            <div>{adjustedPL > 0 ? '+' : ''}₪{adjustedPL}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text3)', textDecoration: 'line-through' }}>{totalPL > 0 ? '+' : ''}₪{totalPL}</div>
+                          </div>
+                        ) : (
+                          `${totalPL > 0 ? '+' : ''}₪${totalPL}`
+                        )}
                       </div>
                     </div>
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -349,6 +378,14 @@ export default function Settlements() {
                           {pokerPL > 0 ? '+' : ''}₪{pokerPL}
                         </span>
                       </div>
+                      {adjustedPL !== null && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                          <span style={{ color: 'var(--orange)' }}>⚖️ לאחר קיזוז צ'יפים</span>
+                          <span className={adjustedPL > 0 ? 'amount-pos' : adjustedPL < 0 ? 'amount-neg' : 'amount-zero'}>
+                            {adjustedPL > 0 ? '+' : ''}₪{adjustedPL}
+                          </span>
+                        </div>
+                      )}
                       {expenseBalance !== 0 && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                           <span style={{ color: 'var(--text3)' }}>🛒 {expenseBalance > 0 ? 'מגיע מקניות' : 'חייב מקניות'}</span>
